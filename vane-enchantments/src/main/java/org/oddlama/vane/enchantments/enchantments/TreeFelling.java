@@ -25,6 +25,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.oddlama.vane.annotation.enchantment.Rarity;
 import org.oddlama.vane.annotation.enchantment.VaneEnchantment;
 import org.oddlama.vane.core.config.recipes.RecipeList;
@@ -41,7 +42,7 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
     // Ticks per block break at each level (1-indexed: index 0 unused)
     private static final int[] TICKS_PER_LEVEL = { 0, 4, 2, 1 };
     // Max concurrent tree felling operations per player at each level
-    private static final int[] MAX_CONCURRENT_PER_LEVEL = { 0, 1, 2, 3 };
+    private static final int[] MAX_CONCURRENT_PER_LEVEL = { 0, 1, 3, 5 };
 
     // Track active felling count per player (for concurrency limiting)
     private final Map<UUID, Integer> active_felling_count = new HashMap<>();
@@ -65,6 +66,12 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
             }
         }
     }
+
+    // Cardinal faces for leaf BFS (leaves only connect cardinally)
+    private static final BlockFace[] CARDINAL_FACES = {
+        BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST,
+        BlockFace.WEST, BlockFace.UP, BlockFace.DOWN
+    };
 
     public TreeFelling(Context<Enchantments> context) {
         super(context);
@@ -119,9 +126,14 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
             return;
         }
 
+        // Immediately increment the count to prevent races from rapid block breaking
+        active_felling_count.put(player_id, current_count + 1);
+
         // Collect the tree
         final var tree = collect_tree(block);
         if (tree == null) {
+            // Decrement the count since we're not actually felling
+            decrement_felling_count(player_id);
             return;
         }
 
@@ -132,15 +144,14 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
         tree.logs.remove(block);
 
         if (tree.logs.isEmpty() && tree.leaves.isEmpty()) {
+            decrement_felling_count(player_id);
             return;
         }
 
         // Determine speed from level
         final int ticks_per_block = level < TICKS_PER_LEVEL.length ? TICKS_PER_LEVEL[level] : TICKS_PER_LEVEL[TICKS_PER_LEVEL.length - 1];
 
-        // Start progressive felling — increment active count
-        active_felling_count.put(player_id, current_count + 1);
-
+        // Start progressive felling
         final var all_blocks = new ArrayList<Block>();
         all_blocks.addAll(tree.logs);
         // Sort leaves by Y so they break top-down (natural look)
@@ -150,11 +161,15 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
         // Register all blocks as being felled to prevent recursive triggers
         blocks_being_felled.addAll(all_blocks);
 
-        schedule_task_timer(new Runnable() {
+        // Start progressive felling with a cancellable timer
+        new BukkitRunnable() {
             int index = 0;
+            boolean finished = false;
 
             @Override
             public void run() {
+                if (finished) return;
+
                 // Check if axe still exists
                 final var current_item = player.getEquipment().getItemInMainHand();
                 if (current_item.getType() == Material.AIR || current_item.getAmount() <= 0) {
@@ -168,6 +183,11 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
                     return;
                 }
 
+                // Skip consecutive already-broken blocks (e.g. leaves that decayed naturally)
+                while (index < all_blocks.size() && all_blocks.get(index).getType() == Material.AIR) {
+                    index++;
+                }
+
                 if (index >= all_blocks.size()) {
                     finish();
                     return;
@@ -176,12 +196,7 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
                 final var target = all_blocks.get(index);
                 index++;
 
-                // Skip if block was already broken (by another plugin, decay, etc.)
-                if (target.getType() == Material.AIR) {
-                    return;
-                }
-
-                final boolean is_log = Tag.LOGS.isTagged(target.getType()) && !is_stripped(target.getType());
+                final boolean is_log = is_natural_log(target.getType());
 
                 // Fire a BlockBreakEvent for protection plugin compatibility
                 final var break_event = new BlockBreakEvent(target, player);
@@ -190,34 +205,38 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
                     return;
                 }
 
-                // Break the block with the tool so enchantments like silk touch are applied
+                // Break the block
                 final boolean has_silk_touch = current_item.containsEnchantment(Enchantment.SILK_TOUCH);
                 if (is_log) {
                     target.breakNaturally(current_item);
                     damage_item(player, current_item, 1);
+                } else if (has_silk_touch) {
+                    target.breakNaturally(current_item);
                 } else {
-                    // Leaf block
-                    if (has_silk_touch) {
-                        target.breakNaturally(current_item);
-                    } else {
-                        // Break naturally without tool — drops saplings, sticks, apples as if decayed
-                        target.breakNaturally();
-                    }
-                    // Leaves don't cost durability (consistent with natural leaf decay)
+                    // Break naturally without tool — drops saplings, sticks, apples as if decayed
+                    target.breakNaturally();
                 }
             }
 
             private void finish() {
-                // Clean up felling tracking
-                blocks_being_felled.removeAll(all_blocks);
-                final int count = active_felling_count.getOrDefault(player_id, 1);
-                if (count <= 1) {
-                    active_felling_count.remove(player_id);
-                } else {
-                    active_felling_count.put(player_id, count - 1);
+                if (finished) return;
+                finished = true;
+                cancel();
+                for (final var b : all_blocks) {
+                    blocks_being_felled.remove(b);
                 }
+                decrement_felling_count(player_id);
             }
-        }, 1L, ticks_per_block);
+        }.runTaskTimer(get_module(), 1L, ticks_per_block);
+    }
+
+    private void decrement_felling_count(UUID player_id) {
+        final int count = active_felling_count.getOrDefault(player_id, 1);
+        if (count <= 1) {
+            active_felling_count.remove(player_id);
+        } else {
+            active_felling_count.put(player_id, count - 1);
+        }
     }
 
     /**
@@ -303,38 +322,37 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
      * Collects all blocks belonging to a natural tree starting from the given log block.
      * Returns null if the structure doesn't appear to be a natural tree.
      *
-     * Natural tree detection:
-     * 1. All connected logs must be the same wood family
-     * 2. Trunk must connect downward to solid ground
-     * 3. Must have non-persistent leaves of the matching type adjacent to logs
-     * 4. No stripped logs connected
-     * 5. Maximum 256 logs
-     *
-     * Only logs at or above the origin's Y level are included in the result
-     * for felling. Logs below are used only for tree validation.
+     * Validates: same wood family, ground connection, matching non-persistent leaves,
+     * no stripped logs, max 256 logs. Leaf presence is checked during the log BFS
+     * to avoid a separate full-tree scan. Only returns logs at or above origin Y.
      */
     private TreeResult collect_tree(Block origin) {
         final var origin_type = origin.getType();
         final var wood_family = get_wood_family(origin_type);
         final int origin_y = origin.getY();
 
-        // BFS to find ALL connected logs of the same wood family (full tree for validation)
         final var visited = new HashSet<Block>();
         final var queue = new ArrayDeque<Block>();
-        final var all_logs = new ArrayList<Block>();
+        final var logs_above = new ArrayList<Block>();
+        int total_log_count = 0;
 
         queue.add(origin);
         visited.add(origin);
 
         boolean has_ground_connection = false;
+        boolean has_matching_leaves = false;
 
         while (!queue.isEmpty()) {
-            if (all_logs.size() > MAX_LOG_COUNT) {
+            if (total_log_count > MAX_LOG_COUNT) {
                 return null;
             }
 
             final var current = queue.poll();
-            all_logs.add(current);
+            total_log_count++;
+
+            if (current.getY() >= origin_y) {
+                logs_above.add(current);
+            }
 
             // Check for ground connection beneath this log
             final var below = current.getRelative(BlockFace.DOWN);
@@ -361,137 +379,85 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
                     queue.add(neighbor);
                 }
             }
+
+            // Lightweight leaf check during log scan (avoids separate full-tree leaf BFS for validation)
+            if (!has_matching_leaves) {
+                for (final var face : CARDINAL_FACES) {
+                    final var adj = current.getRelative(face);
+                    final var adj_type = adj.getType();
+                    if (is_leaf_material(adj_type) && leaf_matches_wood(adj_type, wood_family)) {
+                        if (adj.getBlockData() instanceof Leaves ld && !ld.isPersistent()) {
+                            has_matching_leaves = true;
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
-        // Must connect to ground
-        if (!has_ground_connection) {
+        if (!has_ground_connection || !has_matching_leaves) {
             return null;
         }
 
-        // Filter: only logs at or above the break point are felled
-        final var logs = new ArrayList<Block>();
-        for (final var log : all_logs) {
-            if (log.getY() >= origin_y) {
-                logs.add(log);
-            }
-        }
+        // Single-pass leaf collection from all logs at/above break point
+        final var leaves = collect_leaves(logs_above, wood_family);
 
-        // Collect only leaves that belong to THIS tree and are attached to
-        // logs at or above the break point.
-        final var log_set = new HashSet<>(logs);
-        final var leaf_visited = new HashSet<Block>();
-        final var leaves = new ArrayList<Block>();
-
-        for (final var log : logs) {
-            collect_own_leaves(log, wood_family, log_set, leaf_visited, leaves);
-        }
-
-        // Must have at least some leaves to be considered a natural tree
-        // (check against the full tree's logs, not just the upper portion)
-        if (leaves.isEmpty()) {
-            // Re-check with all logs in case the leaves are only on the lower portion
-            final var full_log_set = new HashSet<>(all_logs);
-            final var full_leaf_visited = new HashSet<Block>();
-            final var full_leaves = new ArrayList<Block>();
-            for (final var log : all_logs) {
-                collect_own_leaves(log, wood_family, full_log_set, full_leaf_visited, full_leaves);
-            }
-            if (full_leaves.isEmpty()) {
-                return null;
-            }
-        }
-
-        return new TreeResult(logs, leaves);
+        return new TreeResult(logs_above, leaves);
     }
 
     /**
-     * Collects non-persistent leaf blocks that belong to THIS tree only.
-     *
-     * Only follows leaves whose distance is increasing (away from the log).
-     * Stops if a leaf's neighbor at a lower distance is adjacent to a log
-     * that doesn't belong to this tree — that leaf belongs to the other tree.
+     * Collects non-persistent leaves belonging to the given logs via single-pass BFS.
+     * Seeds from all logs at once (instead of per-log), follows increasing leaf distance.
+     * Uses visited.add() return value to avoid redundant contains+add hash lookups.
      */
-    private void collect_own_leaves(Block log, String wood_family, Set<Block> our_logs,
-                                     Set<Block> visited, List<Block> leaves) {
+    private List<Block> collect_leaves(List<Block> logs, String wood_family) {
+        final var log_set = new HashSet<>(logs);
+        final var visited = new HashSet<Block>();
         final var queue = new ArrayDeque<Block>();
-        final var cardinal = new BlockFace[] {
-            BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST,
-            BlockFace.WEST, BlockFace.UP, BlockFace.DOWN
-        };
+        final var leaves = new ArrayList<Block>();
 
-        // Seed: direct leaf neighbors of this log
-        for (final var face : cardinal) {
-            final var neighbor = log.getRelative(face);
-            if (visited.contains(neighbor) || !is_leaf_material(neighbor.getType())) {
-                continue;
-            }
-            if (!leaf_matches_wood(neighbor.getType(), wood_family)) {
-                continue;
-            }
-            final var data = neighbor.getBlockData();
-            if (data instanceof Leaves leaf_data && !leaf_data.isPersistent() && leaf_data.getDistance() == 1) {
-                visited.add(neighbor);
-                leaves.add(neighbor);
-                queue.add(neighbor);
+        // Seed: distance-1 leaves adjacent to any of our logs
+        for (final var log : logs) {
+            for (final var face : CARDINAL_FACES) {
+                final var neighbor = log.getRelative(face);
+                if (!visited.add(neighbor)) continue;
+                final var neighbor_type = neighbor.getType();
+                if (!is_leaf_material(neighbor_type) || !leaf_matches_wood(neighbor_type, wood_family)) continue;
+                if (neighbor.getBlockData() instanceof Leaves ld && !ld.isPersistent() && ld.getDistance() == 1) {
+                    leaves.add(neighbor);
+                    queue.add(neighbor);
+                }
             }
         }
 
-        // BFS through leaves, only following increasing distance and checking ownership
+        // BFS through leaves following increasing distance
         while (!queue.isEmpty()) {
             final var current = queue.poll();
-            final var current_data = (Leaves) current.getBlockData();
-            final int current_dist = current_data.getDistance();
+            final int current_dist = ((Leaves) current.getBlockData()).getDistance();
 
-            for (final var face : cardinal) {
+            for (final var face : CARDINAL_FACES) {
                 final var neighbor = current.getRelative(face);
-                if (visited.contains(neighbor)) {
-                    continue;
-                }
-                if (!is_leaf_material(neighbor.getType())) {
-                    continue;
-                }
-                if (!leaf_matches_wood(neighbor.getType(), wood_family)) {
-                    continue;
-                }
-
-                final var data = neighbor.getBlockData();
-                if (!(data instanceof Leaves leaf_data) || leaf_data.isPersistent()) {
-                    continue;
-                }
-
-                final int neighbor_dist = leaf_data.getDistance();
-
-                // Only follow leaves at the same or greater distance (moving away from trunk)
-                if (neighbor_dist < current_dist) {
-                    continue;
-                }
-
-                // If this leaf is at distance 1, it must be adjacent to one of OUR logs
-                if (neighbor_dist == 1) {
-                    if (!is_adjacent_to_our_log(neighbor, our_logs, cardinal)) {
-                        continue;
-                    }
-                }
-
-                // Max distance 7 — beyond that, leaves would decay anyway
-                if (neighbor_dist > 7) {
-                    continue;
-                }
-
-                visited.add(neighbor);
+                if (!visited.add(neighbor)) continue;
+                final var neighbor_type = neighbor.getType();
+                if (!is_leaf_material(neighbor_type) || !leaf_matches_wood(neighbor_type, wood_family)) continue;
+                if (!(neighbor.getBlockData() instanceof Leaves ld) || ld.isPersistent()) continue;
+                final int nd = ld.getDistance();
+                if (nd < current_dist || nd > 7) continue;
+                if (nd == 1 && !is_adjacent_to_our_log(neighbor, log_set)) continue;
                 leaves.add(neighbor);
                 queue.add(neighbor);
             }
         }
+
+        return leaves;
     }
 
     /**
      * Checks if a leaf block is cardinally adjacent to one of our tree's log blocks.
      */
-    private static boolean is_adjacent_to_our_log(Block leaf, Set<Block> our_logs, BlockFace[] cardinal) {
-        for (final var face : cardinal) {
-            final var adj = leaf.getRelative(face);
-            if (our_logs.contains(adj)) {
+    private static boolean is_adjacent_to_our_log(Block leaf, Set<Block> our_logs) {
+        for (final var face : CARDINAL_FACES) {
+            if (our_logs.contains(leaf.getRelative(face))) {
                 return true;
             }
         }
