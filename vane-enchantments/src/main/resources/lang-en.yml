@@ -81,6 +81,10 @@ enchantment_take_off:
   # The display name of this enchantment. Will be packed into a resource pack.
   name: "Takeoff"
 
+enchantment_tree_felling:
+  # The display name of this enchantment. Will be packed into a resource pack.
+  name: "Timber"
+
 enchantment_unbreakable:
   # The display name of this enchantment. Will be packed into a resource pack.
   name: "Unbreakable"

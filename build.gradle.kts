@@ -27,7 +27,11 @@ subprojects {
 	apply(plugin = "java")
 
 	group = "org.oddlama.vane"
-	version = "1.21.1"
+	version = "1.21.10"
+
+	java {
+		toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+	}
 
 	repositories {
 		mavenLocal()

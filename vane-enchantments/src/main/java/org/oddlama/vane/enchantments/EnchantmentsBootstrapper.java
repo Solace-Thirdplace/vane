@@ -13,6 +13,7 @@ import org.oddlama.vane.enchantments.enchantments.registry.RakeRegistry;
 import org.oddlama.vane.enchantments.enchantments.registry.SeedingRegistry;
 import org.oddlama.vane.enchantments.enchantments.registry.SouldboundRegistry;
 import org.oddlama.vane.enchantments.enchantments.registry.TakeOffRegistry;
+import org.oddlama.vane.enchantments.enchantments.registry.TreeFellingRegistry;
 import org.oddlama.vane.enchantments.enchantments.registry.UnbreakableRegistry;
 import org.oddlama.vane.enchantments.enchantments.registry.WingsRegistry;
 
@@ -35,6 +36,7 @@ public class EnchantmentsBootstrapper implements PluginBootstrap {
                         new WingsRegistry(event);
                         new SouldboundRegistry(event);
                         new TakeOffRegistry(event);
+                        new TreeFellingRegistry(event);
                         new UnbreakableRegistry(event);
                     })
             );

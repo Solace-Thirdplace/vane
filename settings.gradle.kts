@@ -5,6 +5,10 @@ pluginManagement {
 	}
 }
 
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
 rootProject.name = "vane"
 
 // https://docs.gradle.org/current/dsl/org.gradle.api.initialization.Settings.html
