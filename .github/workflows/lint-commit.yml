@@ -1,6 +1,10 @@
 name: Lint commit messages
 
-on: pull_request_target
+on: pull_request
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   lint_commits:
