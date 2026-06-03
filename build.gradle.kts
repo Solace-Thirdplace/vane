@@ -72,6 +72,8 @@ configure(subprojects.filter {
     }
 	dependencies {
 		paperweight.paperDevBundle(rootProject.libs.versions.paper)
+		// Paper's 1.21.11 dev bundle declares this transitive without a version; pin it.
+		compileOnly(rootProject.libs.adventureAnsi)
 	}
 }
 

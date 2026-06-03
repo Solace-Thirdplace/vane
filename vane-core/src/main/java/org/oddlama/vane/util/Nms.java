@@ -8,7 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.dedicated.DedicatedServer;
 import net.minecraft.server.level.ServerLevel;
@@ -141,7 +141,7 @@ public class Nms {
 		// so it will be available in vanilla constructs like the /summon command)
 		data_types_map.put("minecraft:" + id, data_types_map.get(base_entity_type.toString()));
 		// Store a new type in registry
-		final var rk = ResourceKey.create(Registries.ENTITY_TYPE, ResourceLocation.withDefaultNamespace(id));
+		final var rk = ResourceKey.create(Registries.ENTITY_TYPE, Identifier.withDefaultNamespace(id));
 		Registry.register(BuiltInRegistries.ENTITY_TYPE, id, builder.build(rk));
 	}
 

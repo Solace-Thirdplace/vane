@@ -1,5 +1,5 @@
 [versions]
-paper = "1.21.10-R0.1-SNAPSHOT"
+paper = "1.21.11-R0.1-SNAPSHOT"
 bstats = "3.1.0"
 
 [libraries]
@@ -10,6 +10,9 @@ commonsText = { group = "org.apache.commons", name = "commons-text", version = "
 json = { group = "org.json", name = "json", version = "20250517" }
 slf4j = { group = "org.slf4j", name = "slf4j-api", version = "2.0.17" }
 nightConfig = { group = "com.electronwill.night-config", name = "toml", version = "3.8.3" }
+# Paper's 1.21.11 dev bundle (snapshot 20260511) declares adventure-text-serializer-ansi
+# without a version, so we must pin it ourselves. Keep in sync with Paper's adventure version.
+adventureAnsi = { group = "net.kyori", name = "adventure-text-serializer-ansi", version = "4.26.1" }
 
 # Minecraft
 bstatsBase = { group = "org.bstats", name = "bstats-base", version.ref = "bstats" }
