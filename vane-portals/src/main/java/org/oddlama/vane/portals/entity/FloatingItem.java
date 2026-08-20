@@ -4,6 +4,7 @@ import static org.oddlama.vane.util.Nms.world_handle;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -20,7 +21,7 @@ public class FloatingItem extends ItemEntity {
     }
 
     public FloatingItem(final World world, double x, double y, double z) {
-        this(EntityType.ITEM, world_handle(world));
+        this(EntityTypes.ITEM, world_handle(world));
         setPos(x, y, z);
     }
 

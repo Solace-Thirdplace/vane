@@ -9,7 +9,7 @@ dependencies {
 }
 
 java {
-	toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+	toolchain.languageVersion.set(JavaLanguageVersion.of(25))
 }
 
 // We don't need to generate an empty `vane.jar`
@@ -30,7 +30,7 @@ subprojects {
 	version = "1.21.10"
 
 	java {
-		toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+		toolchain.languageVersion.set(JavaLanguageVersion.of(25))
 	}
 
 	repositories {
@@ -55,9 +55,17 @@ subprojects {
 	}
 }
 
+// vane-annotations only needs the Bukkit API surface, not NMS. Keeping paperweight off it
+// avoids the mache/dev-bundle variants making the project dependency ambiguous to consumers.
+configure(subprojects.filter { it.name == "vane-annotations" }) {
+	dependencies {
+		"compileOnly"("io.papermc.paper:paper-api:${rootProject.libs.versions.paper.get()}")
+	}
+}
+
 // All Paper Plugins + Annotations.
 configure(subprojects.filter {
-	!listOf("vane-velocity", "vane-proxy-core").contains(it.name)
+	!listOf("vane-velocity", "vane-proxy-core", "vane-annotations").contains(it.name)
 }) {
 	apply(plugin = "io.papermc.paperweight.userdev")
 

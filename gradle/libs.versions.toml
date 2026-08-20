@@ -1,5 +1,5 @@
 [versions]
-paper = "1.21.11-R0.1-SNAPSHOT"
+paper = "26.2.build.112-stable"
 bstats = "3.1.0"
 
 [libraries]
@@ -27,7 +27,7 @@ dynmap = { group = "us.dynmap", name = "DynmapCoreAPI", version = "3.7-beta-6" }
 bluemap = { group = "de.bluecolored", name = "bluemap-api", version = "2.7.7" }
 
 [plugins]
-paperweightUserdev = { id = "io.papermc.paperweight.userdev", version = "2.0.0-beta.19" }
+paperweightUserdev = { id = "io.papermc.paperweight.userdev", version = "2.0.0-beta.22" }
 runPaper = { id = "xyz.jpenilla.run-paper", version = "3.0.2" }
 shadow = { id = "com.gradleup.shadow", version = "9.3.0" }
 blossom = { id = "net.kyori.blossom", version = "2.2.0" }
