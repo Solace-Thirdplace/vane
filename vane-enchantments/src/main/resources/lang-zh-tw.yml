@@ -51,6 +51,9 @@ enchantment_leafchopper:
 enchantment_lightning:
   name: "閃電"
 
+enchantment_magnetism:
+  name: "磁性"
+
 enchantment_rake:
   name: "快速耕地"
 

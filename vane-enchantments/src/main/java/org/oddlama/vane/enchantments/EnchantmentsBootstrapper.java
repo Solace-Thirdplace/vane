@@ -9,6 +9,7 @@ import org.oddlama.vane.enchantments.enchantments.registry.GrapplingHookRegistry
 import org.oddlama.vane.enchantments.enchantments.registry.HellBentRegistry;
 import org.oddlama.vane.enchantments.enchantments.registry.LeafchopperRegistry;
 import org.oddlama.vane.enchantments.enchantments.registry.LightningRegistry;
+import org.oddlama.vane.enchantments.enchantments.registry.MagnetismRegistry;
 import org.oddlama.vane.enchantments.enchantments.registry.RakeRegistry;
 import org.oddlama.vane.enchantments.enchantments.registry.SeedingRegistry;
 import org.oddlama.vane.enchantments.enchantments.registry.SouldboundRegistry;
@@ -31,6 +32,7 @@ public class EnchantmentsBootstrapper implements PluginBootstrap {
                         new HellBentRegistry(event);
                         new LeafchopperRegistry(event);
                         new LightningRegistry(event);
+                        new MagnetismRegistry(event);
                         new RakeRegistry(event);
                         new SeedingRegistry(event);
                         new WingsRegistry(event);

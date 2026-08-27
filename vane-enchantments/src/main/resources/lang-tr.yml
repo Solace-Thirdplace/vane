@@ -62,6 +62,10 @@ enchantment_lightning:
   # The display name of this enchantment. Will be packed into a resource pack.
   name: "Yıldırım"
   
+enchantment_magnetism:
+  # The display name of this enchantment. Will be packed into a resource pack.
+  name: "Manyetizma"
+
 enchantment_rake:
   # The display name of this enchantment. Will be packed into a resource pack.
   name: "Tırmık"

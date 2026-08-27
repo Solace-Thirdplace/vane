@@ -51,6 +51,9 @@ enchantment_leafchopper:
 enchantment_lightning:
   name: "Foudre"
 
+enchantment_magnetism:
+  name: "Magnétisme"
+
 enchantment_rake:
   name: "Râteau"
 
