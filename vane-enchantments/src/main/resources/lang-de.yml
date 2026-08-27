@@ -58,6 +58,9 @@ enchantment_leafchopper:
 enchantment_lightning:
   name: "Blitzschlag"
 
+enchantment_magnetism:
+  name: "Magnetismus"
+
 enchantment_rake:
   name: "Harke"
 
