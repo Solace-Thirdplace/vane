@@ -24,6 +24,12 @@ public class LangManager {
     Module<?> module;
     private List<LangField<?>> lang_fields = new ArrayList<>();
     LangVersionField field_version;
+    private String last_error;
+
+    /** A short description of the most recent reload() failure, or null if the last reload() succeeded. */
+    public String last_error() {
+        return last_error;
+    }
 
     public LangManager(Module<?> module) {
         this.module = module;
@@ -105,6 +111,8 @@ public class LangManager {
                 module.log.severe("supported language file.");
             }
 
+            last_error =
+                "'" + file.getName() + "' has version " + version + ", but " + expected_version() + " was expected";
             return false;
         }
 
@@ -163,8 +171,10 @@ public class LangManager {
             }
         } catch (YamlLoadException e) {
             module.log.log(Level.SEVERE, "error while loading '" + file.getAbsolutePath() + "'", e);
+            last_error = e.getMessage();
             return false;
         }
+        last_error = null;
         return true;
     }
 

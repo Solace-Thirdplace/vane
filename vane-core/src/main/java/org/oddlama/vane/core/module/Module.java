@@ -218,6 +218,13 @@ public abstract class Module<T extends Module<T>> extends JavaPlugin implements 
 		core.register_module(this);
 
 		load_persistent_storage();
+		if (!persistent_storage_manager.is_loaded()) {
+			// Persistent storage failed to load. load_persistent_storage() has already
+			// reported this (and, for vane-core, scheduled a server shutdown). Either way,
+			// do not proceed to load configuration/localization or call enable() against
+			// storage that never came up, and do not schedule the periodic save task.
+			return;
+		}
 		reload_configuration();
 
 		// Schedule persistent storage saving every minute
@@ -306,15 +313,29 @@ public abstract class Module<T extends Module<T>> extends JavaPlugin implements 
 		context_group.generate_resource_pack(pack);
 	}
 
+	// Details of the most recent configuration/localization load failure, captured here
+	// (rather than only inside ConfigManager/LangManager) because reload_configuration()
+	// needs them to build its failure banner after try_reload_configuration()/
+	// try_reload_localization() already returned false.
+	private String last_config_error;
+	private File last_lang_file;
+	private String last_lang_error;
+
 	private boolean try_reload_configuration() {
 		// Generate new file if not existing
 		final var file = config_manager.standard_file();
 		if (!file.exists() && !config_manager.generate_file(file, null)) {
+			last_config_error = config_manager.last_error();
 			return false;
 		}
 
 		// Reload automatic variables
-		return config_manager.reload(file);
+		if (!config_manager.reload(file)) {
+			last_config_error = config_manager.last_error();
+			return false;
+		}
+
+		return true;
 	}
 
 	private void update_lang_file(String lang_file) {
@@ -359,30 +380,94 @@ public abstract class Module<T extends Module<T>> extends JavaPlugin implements 
 
 		// Generate new file if not existing
 		final var file = new File(getDataFolder(), "lang-" + lang_code + ".yml");
+		last_lang_file = file;
 		if (!file.exists()) {
-			log.severe("Missing language file '" + file.getName() + "' for module " + get_name());
+			last_lang_error = "missing language file '" + file.getName() + "'";
 			return false;
 		}
 
 		// Reload automatic variables
-		return lang_manager.reload(file);
+		if (!lang_manager.reload(file)) {
+			last_lang_error = lang_manager.last_error();
+			return false;
+		}
+
+		return true;
+	}
+
+	private static final String FAILURE_BANNER_BAR = "!".repeat(80);
+
+	/**
+	 * Prints a hard-to-miss, multi-line SEVERE banner. Used for module load/reload failures
+	 * so operators cannot mistake them for routine log spam.
+	 */
+	private void print_failure_banner(String... lines) {
+		log.severe(FAILURE_BANNER_BAR);
+		for (var line : lines) {
+			log.severe(line);
+		}
+		log.severe(FAILURE_BANNER_BAR);
+	}
+
+	/**
+	 * Handles a config/localization load failure reported by try_reload_configuration() or
+	 * try_reload_localization(). Behavior depends on whether this is vane-core itself, and
+	 * (for other modules) whether the module already had a known-good configuration active:
+	 *
+	 * <ul>
+	 *   <li>vane-core: nothing can run without it, so the server is still shut down, but only
+	 *       after printing the full cause in a banner (previously a single log.severe line).</li>
+	 *   <li>any other module, first-ever load (was_enabled == false, i.e. this module has never
+	 *       successfully come up): the module is left disabled and the server keeps running.</li>
+	 *   <li>any other module, reload of an already-running module (was_enabled == true, e.g. via
+	 *       "/vane reload"): the new file is rejected and the module keeps running unchanged on
+	 *       its previous configuration, which ConfigManager/LangManager never overwrote because
+	 *       both do a full check-then-load pass (a failure aborts before any field is touched).</li>
+	 * </ul>
+	 */
+	private void report_config_load_failure(boolean was_enabled, String kind, File file, String cause) {
+		final var cause_str = (cause == null || cause.isBlank()) ? "unknown error (see log above for details)" : cause;
+
+		if (this == core) {
+			print_failure_banner(
+					"VANE-CORE FAILED TO LOAD ITS " + kind.toUpperCase() + ".",
+					"File:  " + file.getAbsolutePath(),
+					"Cause: " + cause_str,
+					"No vane module can run without a working vane-core.",
+					"SHUTTING DOWN THE SERVER.");
+			getServer().shutdown();
+			return;
+		}
+
+		if (was_enabled) {
+			print_failure_banner(
+					"RELOAD REJECTED FOR MODULE vane-" + get_name() + ".",
+					"The new " + kind + " failed to load.",
+					"File:  " + file.getAbsolutePath(),
+					"Cause: " + cause_str,
+					"THE RELOAD WAS REJECTED. THE PREVIOUS " + kind.toUpperCase() + " REMAINS ACTIVE.",
+					"vane-" + get_name() + " keeps running unchanged. Fix the file above and reload again.");
+		} else {
+			print_failure_banner(
+					"MODULE vane-" + get_name() + " FAILED TO LOAD ITS " + kind.toUpperCase() + ".",
+					"File:  " + file.getAbsolutePath(),
+					"Cause: " + cause_str,
+					"MODULE DISABLED — SERVER KEPT RUNNING. FIX THE FILE AND RESTART.",
+					"(Or fix the file and run /vane reload " + get_name() + ".)");
+		}
 	}
 
 	public boolean reload_configuration() {
 		boolean was_enabled = enabled();
 
 		if (!try_reload_configuration()) {
-			// Force stop server, we encountered an invalid config file
-			log.severe("Invalid plugin configuration. Shutting down.");
-			getServer().shutdown();
+			report_config_load_failure(was_enabled, "configuration", config_manager.standard_file(), last_config_error);
 			return false;
 		}
 
 		// Reload localization
 		if (!try_reload_localization()) {
-			// Force stop server, we encountered an invalid lang file
-			log.severe("Invalid localization file. Shutting down.");
-			getServer().shutdown();
+			report_config_load_failure(was_enabled, "localization", last_lang_file, last_lang_error);
 			return false;
 		}
 
@@ -406,11 +491,36 @@ public abstract class Module<T extends Module<T>> extends JavaPlugin implements 
 	public void load_persistent_storage() {
 		// Load automatic persistent variables
 		final var file = get_persistent_storage_file();
-		if (!persistent_storage_manager.load(file)) {
-			// Force stop server, we encountered an invalid persistent storage file.
-			// This prevents further corruption.
-			log.severe("Invalid persistent storage. Shutting down to prevent further corruption.");
+		if (persistent_storage_manager.load(file)) {
+			return;
+		}
+
+		final var cause = persistent_storage_manager.last_error();
+		final var cause_str = (cause == null || cause.isBlank()) ? "unknown error (see log above for details)" : cause;
+
+		if (this == core) {
+			print_failure_banner(
+					"VANE-CORE FAILED TO LOAD ITS PERSISTENT STORAGE.",
+					"File:  " + file.getAbsolutePath(),
+					"Cause: " + cause_str,
+					"No vane module can run without a working vane-core.",
+					"SHUTTING DOWN THE SERVER TO PREVENT FURTHER CORRUPTION.");
 			getServer().shutdown();
+		} else {
+			// persistent_storage_manager.save() unconditionally no-ops while its internal
+			// is_loaded flag is false (see PersistentStorageManager#save), and that flag is
+			// only ever set true by a fully successful load(). Since this module's load just
+			// failed, is_loaded is guaranteed false here and stays false until a future
+			// successful load_persistent_storage() call (i.e. a restart), so nothing this
+			// module does from here on - including its periodic autosave and onDisable() -
+			// can ever overwrite the good storage.json already on disk.
+			print_failure_banner(
+					"MODULE vane-" + get_name() + " FAILED TO LOAD ITS PERSISTENT STORAGE.",
+					"File:  " + file.getAbsolutePath(),
+					"Cause: " + cause_str,
+					"This module's storage will NOT be written while in this state, so the",
+					"good data already on disk cannot be overwritten.",
+					"MODULE DISABLED — SERVER KEPT RUNNING. FIX THE FILE AND RESTART.");
 		}
 	}
 
