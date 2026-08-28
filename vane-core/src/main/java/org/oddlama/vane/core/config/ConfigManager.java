@@ -44,6 +44,12 @@ public class ConfigManager {
     private Map<String, String> section_descriptions = new HashMap<>();
     ConfigVersionField field_version;
     Module<?> module;
+    private String last_error;
+
+    /** A short description of the most recent reload()/generate_file() failure, or null if it succeeded. */
+    public String last_error() {
+        return last_error;
+    }
 
     public ConfigManager(Module<?> module) {
         this.module = module;
@@ -155,6 +161,8 @@ public class ConfigManager {
                 module.log.severe("it will be regenerated next time the server is started.");
             }
 
+            last_error =
+                "'" + file.getName() + "' has version " + version + ", but " + expected_version() + " was expected";
             return false;
         }
 
@@ -264,6 +272,7 @@ public class ConfigManager {
             Files.writeString(tmp_file.toPath(), content);
         } catch (IOException e) {
             module.log.log(Level.SEVERE, "error while writing config file '" + file + "'", e);
+            last_error = "could not write '" + file + "': " + e.getMessage();
             return false;
         }
 
@@ -283,6 +292,7 @@ public class ConfigManager {
                 "' with temporary file (very recent changes might be lost)!",
                 e
             );
+            last_error = "could not replace '" + file + "' with generated file: " + e.getMessage();
             return false;
         }
 
@@ -323,6 +333,8 @@ public class ConfigManager {
                 "')",
                 e
             );
+            last_error =
+                "could not replace '" + standard_file() + "' with updated version: " + e.getMessage();
             return false;
         }
 
@@ -340,9 +352,11 @@ public class ConfigManager {
             }
         } catch (YamlLoadException e) {
             module.log.log(Level.SEVERE, "error while loading '" + file.getName() + "'", e);
+            last_error = e.getMessage();
             return false;
         }
 
+        last_error = null;
         return true;
     }
 

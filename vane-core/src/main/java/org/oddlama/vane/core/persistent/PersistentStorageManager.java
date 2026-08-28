@@ -37,6 +37,17 @@ public class PersistentStorageManager {
     private List<Migration> migrations = new ArrayList<>();
     Module<?> module;
     boolean is_loaded = false;
+    private String last_error;
+
+    /** Whether the persistent storage is currently loaded and safe to save. */
+    public boolean is_loaded() {
+        return is_loaded;
+    }
+
+    /** A short description of the most recent load() failure, or null if the last load() succeeded. */
+    public String last_error() {
+        return last_error;
+    }
 
     public PersistentStorageManager(Module<?> module) {
         this.module = module;
@@ -103,6 +114,7 @@ public class PersistentStorageManager {
     public boolean load(File file) {
         if (!file.exists() && is_loaded) {
             module.log.severe("Cannot reload persistent storage from nonexistent file '" + file.getName() + "'");
+            last_error = "storage file '" + file.getName() + "' no longer exists";
             return false;
         }
 
@@ -117,6 +129,7 @@ public class PersistentStorageManager {
             } catch (IOException e) {
                 module.log.severe("error while loading persistent data from '" + file.getName() + "':");
                 module.log.severe(e.getMessage());
+                last_error = e.getMessage();
                 return false;
             }
         } else {
@@ -158,10 +171,12 @@ public class PersistentStorageManager {
             }
         } catch (IOException e) {
             module.log.log(Level.SEVERE, "error while loading persistent variables from '" + file.getName() + "'", e);
+            last_error = e.getMessage();
             return false;
         }
 
         is_loaded = true;
+        last_error = null;
         return true;
     }
 
