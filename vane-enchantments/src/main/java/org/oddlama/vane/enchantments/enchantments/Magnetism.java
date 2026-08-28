@@ -1,6 +1,5 @@
 package org.oddlama.vane.enchantments.enchantments;
 
-import java.util.List;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
@@ -18,7 +17,6 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 import org.oddlama.vane.annotation.config.ConfigInt;
-import org.oddlama.vane.annotation.config.ConfigIntList;
 import org.oddlama.vane.annotation.enchantment.Rarity;
 import org.oddlama.vane.annotation.enchantment.VaneEnchantment;
 import org.oddlama.vane.core.config.recipes.RecipeList;
@@ -56,8 +54,11 @@ public class Magnetism extends CustomEnchantment<Enchantments> {
     )
     public int config_pull_period_ticks;
 
-    @ConfigIntList(def = { 6, 10 }, min = 1, max = 64, desc = "Pull radius in blocks for each enchantment level.")
-    public List<Integer> config_pull_radius;
+    @ConfigInt(def = 6, min = 1, max = 64, desc = "Pull radius in blocks at enchantment level 1.")
+    public int config_pull_radius_level_1;
+
+    @ConfigInt(def = 10, min = 1, max = 64, desc = "Pull radius in blocks at enchantment level 2.")
+    public int config_pull_radius_level_2;
 
     @ConfigInt(
         def = 30,
@@ -189,10 +190,10 @@ public class Magnetism extends CustomEnchantment<Enchantments> {
     }
 
     private int radius_for_level(final int level) {
-        if (level >= 1 && level <= config_pull_radius.size()) {
-            return config_pull_radius.get(level - 1);
+        if (level <= 1) {
+            return config_pull_radius_level_1;
         }
-        return config_pull_radius.get(config_pull_radius.size() - 1);
+        return config_pull_radius_level_2;
     }
 
     private void pull_nearby_items(final Player player, final int radius, final long now, final long window_ms) {
