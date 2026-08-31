@@ -146,8 +146,22 @@ public class ResourcePackDistributor extends Listener<Core> {
         }
     }
 
+    /**
+     * Whether this server actually hands out a vane resource pack.
+     *
+     * <p>{@link #pack_url} is still {@code null} when the {@code resource_pack} module group is
+     * disabled (on_enable() never ran), and is set to the empty string when no url was configured
+     * or the configured sha1 was rejected. Every send path has to check this first, otherwise it
+     * builds a {@link URI} from {@code null} and throws.
+     */
+    public boolean is_distributing() {
+        return pack_url != null && !pack_url.isEmpty();
+    }
+
     @EventHandler
     public void on_player_async_connection_configure(AsyncPlayerConnectionConfigureEvent event) {
+        if (!is_distributing()) { return; }
+
         var profile_uuid = event.getConnection().getProfile().getId();
         if (profile_uuid == null) { return; }
 
@@ -182,6 +196,8 @@ public class ResourcePackDistributor extends Listener<Core> {
     }
 
     public void send_resource_pack_during_configuration(@NotNull PlayerConfigurationConnection connection) {
+        if (!is_distributing()) { return; }
+
         var info = ResourcePackInfo.resourcePackInfo(pack_uuid, URI.create(pack_url), pack_sha1);
         var prompt_lang = (config_force) ? lang_pack_required : lang_pack_suggested;
         var prompt = prompt_lang.str().isEmpty() ? null : prompt_lang.str_component();
@@ -200,6 +216,8 @@ public class ResourcePackDistributor extends Listener<Core> {
 
     // For sending the resource pack during gameplay
     public void send_resource_pack(@NotNull Audience audience) {
+        if (!is_distributing()) { return; }
+
         var url2 = pack_url;
         if (localDev) {
             url2 = pack_url + "?" + counter;

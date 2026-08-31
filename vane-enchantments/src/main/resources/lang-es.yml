@@ -12,7 +12,7 @@
 
 # ¡NO CAMBIAR! La versión de este archivo de idioma. Se utiliza para determinar
 # si el archivo debe actualizarse.
-version: 5
+version: 6
 # El código de idioma correspondiente utilizado en paquetes de recursos. Utilizado para
 # generación de paquetes de recursos. Normalmente, esto es una combinación del
 # código de idioma (ISO 639) y el código de país (ISO 3166).
@@ -84,6 +84,10 @@ enchantment_soulbound:
 enchantment_take_off:
   # El nombre que se mostrará para este encantamiento. Se incluirá en un paquete de recursos.
   name: "Despegue"
+
+enchantment_tree_felling:
+  # TODO: translate
+  name: "Timber"
 
 enchantment_unbreakable:
   # El nombre que se mostrará para este encantamiento. Se incluirá en un paquete de recursos.

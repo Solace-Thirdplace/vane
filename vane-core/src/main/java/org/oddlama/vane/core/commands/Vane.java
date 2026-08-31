@@ -86,13 +86,18 @@ public class Vane extends Command<Core> {
 
     private void generate_resource_pack(CommandSender sender) {
         var file = get_module().generate_resource_pack();
-        if (file != null) {
-            lang_resource_pack_generate_success.send(sender, file.getAbsolutePath());
-        } else {
+        if (file == null) {
             lang_resource_pack_generate_fail.send(sender);
+            return;
         }
-        if (sender instanceof Player) {
-            var dist = get_module().resource_pack_distributor;
+
+        lang_resource_pack_generate_success.send(sender, file.getAbsolutePath());
+
+        // Only push the freshly generated pack to the sender if this server actually distributes
+        // the vane pack. With resource_pack/custom_resource_pack disabled there is no url to send,
+        // and the generated file is simply left on disk for the operator to pick up.
+        final var dist = get_module().resource_pack_distributor;
+        if (sender instanceof Player && dist.is_distributing()) {
             dist.update_sha1(file);
             dist.send_resource_pack((Player) sender);
         }
