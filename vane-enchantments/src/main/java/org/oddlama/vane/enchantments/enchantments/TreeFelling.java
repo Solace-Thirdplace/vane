@@ -358,6 +358,15 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
             final var below = current.getRelative(BlockFace.DOWN);
             if (is_ground_block(below.getType())) {
                 has_ground_connection = true;
+            } else if (!has_ground_connection) {
+                // A mangrove trunk grows out of a root system that wraps around its base,
+                // so the supporting roots are not always the block straight below a log.
+                for (final var face : CARDINAL_FACES) {
+                    if (is_mangrove_roots(current.getRelative(face).getType())) {
+                        has_ground_connection = true;
+                        break;
+                    }
+                }
             }
 
             // Explore all 26 neighbors for connected logs
@@ -465,12 +474,21 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
     }
 
     /**
+     * Checks if a material is part of a mangrove root system.
+     */
+    private static boolean is_mangrove_roots(Material material) {
+        return material == Material.MANGROVE_ROOTS || material == Material.MUDDY_MANGROVE_ROOTS;
+    }
+
+    /**
      * Checks if a material is a valid ground block that a tree can grow on.
+     * Mangrove roots count: a mangrove trunk never sits on soil directly, it sits on
+     * its root system (plain roots above water/air, muddy roots inside mud).
      */
     private static boolean is_ground_block(Material material) {
         return switch (material) {
             case DIRT, GRASS_BLOCK, PODZOL, MYCELIUM, ROOTED_DIRT, COARSE_DIRT, MUD,
-                 MUDDY_MANGROVE_ROOTS, MOSS_BLOCK, CLAY -> true;
+                 MANGROVE_ROOTS, MUDDY_MANGROVE_ROOTS, MOSS_BLOCK, CLAY -> true;
             default -> false;
         };
     }
