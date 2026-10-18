@@ -95,7 +95,9 @@ public class Soulbound extends CustomEnchantment<Enchantments> {
         return component.color(NamedTextColor.DARK_GRAY);
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    // HIGHEST, not MONITOR: grave plugins empty the drops at MONITOR, and GravesX
+    // re-registers every other plugin's death listener behind its own.
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void on_player_death(final PlayerDeathEvent event) {
         final var keep_items = event.getItemsToKeep();
 
