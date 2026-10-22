@@ -74,8 +74,11 @@ public class ShapelessRecipeDefinition extends RecipeDefinition {
 
     @Override
     public Recipe to_recipe(NamespacedKey base_key) {
-        final var recipe = new ShapelessRecipe(key(base_key), ItemUtil.itemstack_from_string(this.result).getLeft());
-        this.ingredients.forEach(i -> recipe.addIngredient(RecipeDefinition.recipe_choice(i)));
+        final var recipe_key = key(base_key);
+        final var recipe = new ShapelessRecipe(recipe_key, ItemUtil.itemstack_from_string(this.result).getLeft());
+        this.ingredients.forEach(i ->
+                recipe.addIngredient(IdentityBlindIngredients.choice(recipe_key, RecipeDefinition.recipe_choice(i)))
+            );
         return recipe;
     }
 }
