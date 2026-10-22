@@ -61,7 +61,13 @@ public class Recipes<T extends Module<T>> extends ModuleComponent<T> {
     public void on_config_change() {
         // Recipes are processed in on_config_change and not in on_disable() / on_enable(),
         // as the current recipes need to be removed even if we are disabled afterwards.
-        config_recipes.recipes().forEach(recipe -> get_module().getServer().removeRecipe(recipe.key(base_recipe_key)));
+        config_recipes
+            .recipes()
+            .forEach(recipe -> {
+                final var key = recipe.key(base_recipe_key);
+                get_module().getServer().removeRecipe(key);
+                IdentityBlindIngredients.forget(key);
+            });
         if (enabled() && config_register_recipes) {
             config_recipes
                 .recipes()

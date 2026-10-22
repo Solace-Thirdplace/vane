@@ -16,6 +16,7 @@ import org.json.JSONException;
 import org.oddlama.vane.annotation.VaneModule;
 import org.oddlama.vane.annotation.config.ConfigBoolean;
 import org.oddlama.vane.annotation.lang.LangMessage;
+import org.oddlama.vane.core.config.recipes.IdentityBlindIngredients;
 import org.oddlama.vane.core.enchantments.EnchantmentManager;
 import org.oddlama.vane.core.functional.Consumer1;
 import org.oddlama.vane.core.item.CustomItemRegistry;
@@ -133,6 +134,7 @@ public class Core extends Module<Core> {
         new AuthMultiplexer(this);
         new LootChestProtector(this);
         new VanillaFunctionalityInhibitor(this);
+        new IdentityBlindIngredients(this);
         new DurabilityManager(this);
         new org.oddlama.vane.core.commands.Vane(this);
         new org.oddlama.vane.core.commands.CustomItem(this);
