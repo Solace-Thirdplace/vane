@@ -385,14 +385,7 @@ public class File extends CustomItem<Trifles> {
             return;
         }
 
-        // Create a block break event for block to transmute and check if it gets canceled
         final var block = event.getClickedBlock();
-        final var break_event = new BlockBreakEvent(block, player);
-        get_module().getServer().getPluginManager().callEvent(break_event);
-        if (break_event.isCancelled()) {
-            return;
-        }
-
         final var data = block.getBlockData();
         final var clicked_face = event.getBlockFace();
 
@@ -417,6 +410,16 @@ public class File extends CustomItem<Trifles> {
 
         // Return if nothing was done
         if (sound == null) {
+            return;
+        }
+
+        // Create a block break event for block to transmute and check if it gets canceled.
+        // Only fire it once we know the file would change the block: every listener sees
+        // this event as a real break, so firing it for any clicked block let players farm
+        // block-break counters (quests, stats) by right-clicking logs.
+        final var break_event = new BlockBreakEvent(block, player);
+        get_module().getServer().getPluginManager().callEvent(break_event);
+        if (break_event.isCancelled()) {
             return;
         }
 
