@@ -47,6 +47,7 @@ import java.util.logging.Level;
 
 import static org.oddlama.vane.util.Conversions.ms_to_ticks;
 import static org.oddlama.vane.util.IOUtil.read_json_from_url;
+import org.oddlama.vane.util.Scheduling;
 
 @VaneModule(name = "core", bstats = 8637, config_version = 6, lang_version = 5, storage_version = 1)
 public class Core extends Module<Core> {
@@ -113,8 +114,9 @@ public class Core extends Module<Core> {
     @ConfigBoolean(def = true, desc = "Send update notices to OPed player when a new version of vane is available.")
     public boolean config_update_notices;
 
-    public String current_version = null;
-    public String latest_version = null;
+    // Written by the async update check, read on join from region threads.
+    public volatile String current_version = null;
+    public volatile String latest_version = null;
 
     public Core() {
         if (INSTANCE != null) {
@@ -152,7 +154,8 @@ public class Core extends Module<Core> {
         if (config_update_notices) {
             // Now, and every hour after that, check if a new version is available.
             // OPs will get a message about this when they join.
-            schedule_task_timer(this::check_for_update, 1l, ms_to_ticks(2 * 60l * 60l * 1000l));
+            // The check is a blocking HTTP request, so it runs off the tick threads.
+            Scheduling.async_timer(this, this::check_for_update, 1l, ms_to_ticks(2 * 60l * 60l * 1000l));
         }
     }
 

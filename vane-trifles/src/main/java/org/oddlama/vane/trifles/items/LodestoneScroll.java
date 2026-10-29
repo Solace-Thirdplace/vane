@@ -83,18 +83,26 @@ public class LodestoneScroll extends Scroll {
         }
 
         final var lodestone_location = get_lodestone_location(scroll);
-        var lodestone = lodestone_location == null ? null : lodestone_location.getBlock();
-
-        if (imminent_teleport) {
-            if (lodestone_location == null) {
+        if (lodestone_location == null) {
+            if (imminent_teleport) {
                 lang_teleport_no_bound_lodestone.send_action_bar(player);
-            } else if (lodestone.getType() != Material.LODESTONE) {
-                lang_teleport_missing_lodestone.send_action_bar(player);
-                lodestone = null;
             }
+            return null;
         }
 
-        return lodestone == null ? null : lodestone.getLocation().add(0.5, 1.005, 0.5);
+        // Whether the lodestone is still there is checked in resolve_destination(), on the
+        // thread that owns it. Getting the block's location does not load its chunk.
+        return lodestone_location.getBlock().getLocation().add(0.5, 1.005, 0.5);
+    }
+
+    @Override
+    public Location resolve_destination(final Player player, final Location destination) {
+        final var lodestone = destination.clone().subtract(0.0, 1.0, 0.0).getBlock();
+        if (lodestone.getType() != Material.LODESTONE) {
+            lang_teleport_missing_lodestone.send_action_bar(player);
+            return null;
+        }
+        return destination;
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)

@@ -51,6 +51,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -71,7 +72,8 @@ public abstract class Module<T extends Module<T>> extends JavaPlugin implements 
 	public ConfigManager config_manager = new ConfigManager(this);
 	public LangManager lang_manager = new LangManager(this);
 	public PersistentStorageManager persistent_storage_manager = new PersistentStorageManager(this);
-	private boolean persistent_storage_dirty = false;
+	// Set from region threads (Folia), read by the global save task.
+	private volatile boolean persistent_storage_dirty = false;
 
 	// Per module catch-all permissions
 	public Permission permission_command_catchall_module;
@@ -168,7 +170,8 @@ public abstract class Module<T extends Module<T>> extends JavaPlugin implements 
 	}
 
 	// Loot modification
-	private final Map<NamespacedKey, LootTable> additional_loot_tables = new HashMap<>();
+	// Read from region threads on loot generation (Folia).
+	private final Map<NamespacedKey, LootTable> additional_loot_tables = new ConcurrentHashMap<>();
 
 	// bStats
 	public Metrics metrics;
@@ -231,8 +234,9 @@ public abstract class Module<T extends Module<T>> extends JavaPlugin implements 
 		schedule_task_timer(
 				() -> {
 					if (persistent_storage_dirty) {
-						save_persistent_storage();
+						// Clear before saving so a change made while saving is not lost.
 						persistent_storage_dirty = false;
+						save_persistent_storage();
 					}
 				},
 				60 * 20,

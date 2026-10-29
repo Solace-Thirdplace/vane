@@ -2,7 +2,10 @@ package org.oddlama.vane.core.module;
 
 import java.io.IOException;
 import java.util.function.Consumer;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import org.bukkit.Location;
+import org.bukkit.entity.Entity;
+import org.oddlama.vane.util.Scheduling;
 import org.json.JSONObject;
 import org.oddlama.vane.core.functional.Consumer1;
 import org.oddlama.vane.core.resourcepack.ResourcePackGenerator;
@@ -88,16 +91,48 @@ public interface Context<T extends Module<T>> {
 
     public default void on_generate_resource_pack(final ResourcePackGenerator pack) throws IOException {}
 
-    public default BukkitTask schedule_task_timer(Runnable task, long delay_ticks, long period_ticks) {
-        return get_module().getServer().getScheduler().runTaskTimer(get_module(), task, delay_ticks, period_ticks);
+    // Scheduling. Paper's region schedulers exist on Paper and Folia alike: on Paper all of them
+    // run on the main thread, on Folia each runs on the thread that owns its region. See
+    // org.oddlama.vane.util.Scheduling.
+
+    /** Repeating task on the global region (world-agnostic state only, no entities or blocks). */
+    public default ScheduledTask schedule_task_timer(Runnable task, long delay_ticks, long period_ticks) {
+        return Scheduling.global_timer(get_module(), t -> task.run(), delay_ticks, period_ticks);
     }
 
-    public default BukkitTask schedule_task(Runnable task, long delay_ticks) {
-        return get_module().getServer().getScheduler().runTaskLater(get_module(), task, delay_ticks);
+    /** Delayed task on the global region (world-agnostic state only, no entities or blocks). */
+    public default ScheduledTask schedule_task(Runnable task, long delay_ticks) {
+        return Scheduling.global(get_module(), task, delay_ticks);
     }
 
-    public default BukkitTask schedule_next_tick(Runnable task) {
-        return get_module().getServer().getScheduler().runTask(get_module(), task);
+    /** Next-tick task on the global region (world-agnostic state only, no entities or blocks). */
+    public default ScheduledTask schedule_next_tick(Runnable task) {
+        return Scheduling.global(get_module(), task, 0);
+    }
+
+    /** Delayed task on the thread owning the location's region. */
+    public default ScheduledTask schedule_at(Location location, Runnable task, long delay_ticks) {
+        return Scheduling.at(get_module(), location, task, delay_ticks);
+    }
+
+    /** Delayed task on the entity's scheduler; null if the entity is already removed. */
+    public default ScheduledTask schedule_for(Entity entity, Runnable task, long delay_ticks) {
+        return Scheduling.entity(get_module(), entity, task, null, delay_ticks);
+    }
+
+    /** Runs now if this thread owns the entity, otherwise on the entity's next tick. */
+    public default void run_for(Entity entity, Runnable task) {
+        Scheduling.run_for(get_module(), entity, task);
+    }
+
+    /** Runs now if this thread owns the location, otherwise on its region's next tick. */
+    public default void run_at(Location location, Runnable task) {
+        Scheduling.run_at(get_module(), location, task);
+    }
+
+    /** Runs now on the global region thread, otherwise on its next tick. */
+    public default void run_global(Runnable task) {
+        Scheduling.run_global(get_module(), task);
     }
 
     public default void add_storage_migration_to(long to, String name, Consumer<JSONObject> migrator) {

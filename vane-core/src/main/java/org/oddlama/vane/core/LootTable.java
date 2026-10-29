@@ -2,17 +2,19 @@ package org.oddlama.vane.core;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.oddlama.vane.core.functional.Consumer2;
 
 public class LootTable {
 
-    private Map<NamespacedKey, List<LootTableEntry>> possible_loot = new HashMap<>();
+    // Region threads (Folia) generate loot from this map while /vane reload replaces entries on
+    // the global thread, so it must tolerate concurrent iteration. Entry lists are never mutated.
+    private final Map<NamespacedKey, List<LootTableEntry>> possible_loot = new ConcurrentHashMap<>();
 
     public LootTable() {}
 

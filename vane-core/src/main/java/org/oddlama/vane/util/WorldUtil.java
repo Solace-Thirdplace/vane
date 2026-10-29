@@ -1,15 +1,20 @@
 package org.oddlama.vane.util;
 
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import java.util.HashMap;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.bukkit.World;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.scheduler.BukkitTask;
 
 public class WorldUtil {
 
-    private static final HashMap<UUID, BukkitTask> running_time_change_tasks = new HashMap<>();
+    private static final HashMap<UUID, ScheduledTask> running_time_change_tasks = new HashMap<>();
 
+    /**
+     * Smoothly moves the world time to the given time of day. World time is global state, so the
+     * interpolation runs on the global region scheduler (the main thread on Paper).
+     */
     public static boolean change_time_smoothly(
         final World world,
         final Plugin plugin,
@@ -34,35 +39,33 @@ public class WorldUtil {
             final var absolute_to = absolute_from - rel_from + rel_to;
 
             // Task to advance time every tick
-            BukkitTask task = plugin
-                .getServer()
-                .getScheduler()
-                .runTaskTimer(
-                    plugin,
-                    new Runnable() {
-                        private long elapsed = 0;
+            ScheduledTask task = Scheduling.global_timer(
+                plugin,
+                new Consumer<ScheduledTask>() {
+                    private long elapsed = 0;
 
-                        @Override
-                        public void run() {
-                            // Remove a task if we finished interpolation
-                            if (elapsed > interpolation_ticks) {
-                                synchronized (running_time_change_tasks) {
-                                    running_time_change_tasks.remove(world.getUID()).cancel();
-                                }
+                    @Override
+                    public void accept(ScheduledTask self) {
+                        // Remove a task if we finished interpolation
+                        if (elapsed > interpolation_ticks) {
+                            synchronized (running_time_change_tasks) {
+                                running_time_change_tasks.remove(world.getUID());
                             }
-
-                            // Make the transition smooth by applying a cosine
-                            var lin_delta = (float) elapsed / interpolation_ticks;
-                            var delta = (1f - (float) Math.cos(Math.PI * lin_delta)) / 2f;
-
-                            var cur_ticks = absolute_from + (long) (delta_ticks * delta);
-                            world.setFullTime(cur_ticks);
-                            ++elapsed;
+                            self.cancel();
                         }
-                    },
-                    1,
-                    1
-                );
+
+                        // Make the transition smooth by applying a cosine
+                        var lin_delta = (float) elapsed / interpolation_ticks;
+                        var delta = (1f - (float) Math.cos(Math.PI * lin_delta)) / 2f;
+
+                        var cur_ticks = absolute_from + (long) (delta_ticks * delta);
+                        world.setFullTime(cur_ticks);
+                        ++elapsed;
+                    }
+                },
+                1,
+                1
+            );
 
             running_time_change_tasks.put(world.getUID(), task);
         }
