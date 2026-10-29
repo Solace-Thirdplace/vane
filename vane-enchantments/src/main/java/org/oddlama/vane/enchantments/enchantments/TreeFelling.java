@@ -25,7 +25,10 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.scheduler.BukkitRunnable;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
+import org.oddlama.vane.util.Scheduling;
 import org.oddlama.vane.annotation.enchantment.Rarity;
 import org.oddlama.vane.annotation.enchantment.VaneEnchantment;
 import org.oddlama.vane.core.config.recipes.RecipeList;
@@ -44,11 +47,12 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
     // Max concurrent tree felling operations per player at each level
     private static final int[] MAX_CONCURRENT_PER_LEVEL = { 0, 1, 3, 5 };
 
-    // Track active felling count per player (for concurrency limiting)
-    private final Map<UUID, Integer> active_felling_count = new HashMap<>();
+    // Track active felling count per player (for concurrency limiting).
+    // Concurrent: block breaks fire on every region thread on Folia.
+    private final Map<UUID, Integer> active_felling_count = new ConcurrentHashMap<>();
 
     // Blocks currently queued for felling — skip these in the event handler
-    private final Set<Block> blocks_being_felled = new HashSet<>();
+    private final Set<Block> blocks_being_felled = ConcurrentHashMap.newKeySet();
 
     // All 26 directions (3x3x3 cube minus center) for full connectivity
     private static final int[][] NEIGHBORS = new int[26][3];
@@ -118,16 +122,22 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
             return;
         }
 
-        // Check concurrency limit for this level
+        // Check concurrency limit for this level, and immediately take a slot to prevent
+        // races from rapid block breaking
         final var player_id = player.getUniqueId();
-        final int current_count = active_felling_count.getOrDefault(player_id, 0);
         final int max_concurrent = level < MAX_CONCURRENT_PER_LEVEL.length ? MAX_CONCURRENT_PER_LEVEL[level] : MAX_CONCURRENT_PER_LEVEL[MAX_CONCURRENT_PER_LEVEL.length - 1];
-        if (current_count >= max_concurrent) {
+        final boolean[] acquired = { false };
+        active_felling_count.compute(player_id, (id, count) -> {
+            final int current_count = count == null ? 0 : count;
+            if (current_count >= max_concurrent) {
+                return count;
+            }
+            acquired[0] = true;
+            return current_count + 1;
+        });
+        if (!acquired[0]) {
             return;
         }
-
-        // Immediately increment the count to prevent races from rapid block breaking
-        active_felling_count.put(player_id, current_count + 1);
 
         // Collect the tree
         final var tree = collect_tree(block);
@@ -161,14 +171,26 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
         // Register all blocks as being felled to prevent recursive triggers
         blocks_being_felled.addAll(all_blocks);
 
-        // Start progressive felling with a cancellable timer
-        new BukkitRunnable() {
+        // Start progressive felling with a cancellable timer. It runs on the region that owns
+        // the broken block (the main thread on Paper), which also owns the tree around it.
+        Scheduling.at_timer(get_module(), block.getLocation(), new Consumer<ScheduledTask>() {
             int index = 0;
             boolean finished = false;
+            ScheduledTask self;
 
             @Override
-            public void run() {
-                if (finished) return;
+            public void accept(ScheduledTask task) {
+                self = task;
+                if (finished) {
+                    task.cancel();
+                    return;
+                }
+
+                // Folia: stop if the player left this region (teleported, logged out).
+                if (!Bukkit.isOwnedByCurrentRegion(player)) {
+                    finish();
+                    return;
+                }
 
                 // Check if axe still exists
                 final var current_item = player.getEquipment().getItemInMainHand();
@@ -196,6 +218,11 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
                 final var target = all_blocks.get(index);
                 index++;
 
+                // Folia: a block outside this region cannot be touched from here.
+                if (!Bukkit.isOwnedByCurrentRegion(target.getLocation())) {
+                    return;
+                }
+
                 final boolean is_log = is_natural_log(target.getType());
 
                 // Fire a BlockBreakEvent for protection plugin compatibility
@@ -221,22 +248,17 @@ public class TreeFelling extends CustomEnchantment<Enchantments> {
             private void finish() {
                 if (finished) return;
                 finished = true;
-                cancel();
+                self.cancel();
                 for (final var b : all_blocks) {
                     blocks_being_felled.remove(b);
                 }
                 decrement_felling_count(player_id);
             }
-        }.runTaskTimer(get_module(), 1L, ticks_per_block);
+        }, 1L, ticks_per_block);
     }
 
     private void decrement_felling_count(UUID player_id) {
-        final int count = active_felling_count.getOrDefault(player_id, 1);
-        if (count <= 1) {
-            active_felling_count.remove(player_id);
-        } else {
-            active_felling_count.put(player_id, count - 1);
-        }
+        active_felling_count.computeIfPresent(player_id, (id, count) -> count <= 1 ? null : count - 1);
     }
 
     /**
