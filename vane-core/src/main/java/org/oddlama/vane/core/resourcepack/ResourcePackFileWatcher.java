@@ -8,7 +8,8 @@ import java.util.Iterator;
 import java.util.function.Predicate;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import org.oddlama.vane.util.Scheduling;
 import org.jetbrains.annotations.NotNull;
 
 public class ResourcePackFileWatcher {
@@ -27,8 +28,9 @@ public class ResourcePackFileWatcher {
         var lang_file_match = FileSystems.getDefault().getPathMatcher("glob:**/lang-*.yml");
         register_directories(Paths.get("plugins"), eyes, this::is_vane_module_folder);
 
-        watch_async(eyes, lang_file_match, this::update_and_send_resource_pack).runTaskAsynchronously(
-            resource_pack_distributor.get_module()
+        // The watch loop blocks on WatchService#take, so it lives on an async thread.
+        Scheduling.async(resource_pack_distributor.get_module(), () ->
+            watch(eyes, lang_file_match, this::update_and_send_resource_pack)
         );
     }
 
@@ -36,6 +38,7 @@ public class ResourcePackFileWatcher {
         resource_pack_distributor.counter++;
         resource_pack_distributor.get_module().generate_resource_pack();
         resource_pack_distributor.update_sha1(file);
+        // Sending a resource pack request only queues packets, which is safe from any thread.
         for (Player player : Bukkit.getOnlinePlayers()) {
             resource_pack_distributor.send_resource_pack(player);
         }
@@ -45,67 +48,45 @@ public class ResourcePackFileWatcher {
         return p.getFileName().toString().startsWith("vane-");
     }
 
-    private static class TrackRunned extends BukkitRunnable {
-
-        final Runnable r;
-        boolean has_run = false;
-        boolean has_started = false;
-
-        public TrackRunned(Runnable r) {
-            this.r = r;
-        }
-
-        @Override
-        public void run() {
-            has_started = true;
-            r.run();
-            has_run = true;
-        }
-    }
-
-    private @NotNull BukkitRunnable watch_async(WatchService eyes, PathMatcher match_lang, Runnable on_hit) {
-        return new BukkitRunnable() {
-            @Override
-            public void run() {
-                boolean should_schedule = false;
-                TrackRunned runner = null;
-                for (;;) {
-                    final WatchKey key;
-                    try {
-                        key = eyes.take();
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
-                    // process events
-                    for (WatchEvent<?> event : key.pollEvents()) {
-                        if (event.kind() == OVERFLOW) continue;
-
-                        // This generic is always Path for WatchEvent kinds other than OVERFLOW
-                        @SuppressWarnings("unchecked")
-                        WatchEvent<Path> ev = (WatchEvent<Path>) event;
-                        Path dir = (Path) key.watchable();
-                        Path filename = ev.context();
-                        if (!match_lang.matches(dir.resolve(filename))) continue;
-                        should_schedule = true;
-                    }
-
-                    if (should_schedule) {
-                        if (runner != null) {
-                            if (!runner.has_started) runner.cancel();
-                        }
-                        runner = new TrackRunned(on_hit);
-                        runner.runTaskLater(resource_pack_distributor.get_module().core, 20L);
-                        should_schedule = false;
-                    }
-
-                    // reset the key
-                    boolean valid = key.reset();
-                    if (!valid) {
-                        return;
-                    }
-                }
+    private void watch(WatchService eyes, PathMatcher match_lang, Runnable on_hit) {
+        boolean should_schedule = false;
+        ScheduledTask runner = null;
+        for (;;) {
+            final WatchKey key;
+            try {
+                key = eyes.take();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             }
-        };
+            // process events
+            for (WatchEvent<?> event : key.pollEvents()) {
+                if (event.kind() == OVERFLOW) continue;
+
+                // This generic is always Path for WatchEvent kinds other than OVERFLOW
+                @SuppressWarnings("unchecked")
+                WatchEvent<Path> ev = (WatchEvent<Path>) event;
+                Path dir = (Path) key.watchable();
+                Path filename = ev.context();
+                if (!match_lang.matches(dir.resolve(filename))) continue;
+                should_schedule = true;
+            }
+
+            if (should_schedule) {
+                // Debounce: drop a pending regeneration that has not started yet.
+                // Cancelling a task that already started (or finished) is a no-op.
+                if (runner != null) {
+                    runner.cancel();
+                }
+                runner = Scheduling.global(resource_pack_distributor.get_module().core, on_hit, 20L);
+                should_schedule = false;
+            }
+
+            // reset the key
+            boolean valid = key.reset();
+            if (!valid) {
+                return;
+            }
+        }
     }
 
     private void register_directories(Path root, WatchService watcher, Predicate<Path> path_match) throws IOException {

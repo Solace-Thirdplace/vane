@@ -1,6 +1,7 @@
 package org.oddlama.vane.core.menu;
 
-import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.UUID;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -20,8 +21,9 @@ import org.oddlama.vane.core.module.Context;
 
 public class MenuManager extends Listener<Core> {
 
-    private final HashMap<UUID, Menu> open_menus = new HashMap<>();
-    private final HashMap<Inventory, Menu> menus = new HashMap<>();
+    // Accessed from every player's region thread on Folia.
+    private final Map<UUID, Menu> open_menus = new ConcurrentHashMap<>();
+    private final Map<Inventory, Menu> menus = new ConcurrentHashMap<>();
 
     public TranslatedItemStack<?> item_selector_accept;
     public TranslatedItemStack<?> item_selector_cancel;
@@ -119,12 +121,12 @@ public class MenuManager extends Listener<Core> {
         return menu == null ? open : menu;
     }
 
-    public void add(final Player player, final Menu menu) {
+    public synchronized void add(final Player player, final Menu menu) {
         open_menus.put(player.getUniqueId(), menu);
         menus.put(menu.inventory(), menu);
     }
 
-    public void remove(final Player player, final Menu menu) {
+    public synchronized void remove(final Player player, final Menu menu) {
         open_menus.remove(player.getUniqueId());
         final var orphaned = open_menus.values().stream().allMatch(m -> m != menu);
 
@@ -134,6 +136,7 @@ public class MenuManager extends Listener<Core> {
         }
     }
 
+    /** Calls the functor for every player with an open menu, each on that player's own thread. */
     public void for_each_open(final Consumer2<Player, Menu> functor) {
         for (final var player : get_module().getServer().getOnlinePlayers()) {
             final var open = open_menus.get(player.getUniqueId());
@@ -141,17 +144,16 @@ public class MenuManager extends Listener<Core> {
                 continue;
             }
 
-            functor.apply(player, open);
+            run_for(player, () -> functor.apply(player, open));
         }
     }
 
     public void update(final Menu menu) {
-        get_module()
-            .getServer()
-            .getOnlinePlayers()
-            .stream()
-            .filter(p -> open_menus.get(p.getUniqueId()) == menu)
-            .forEach(p -> p.updateInventory());
+        for (final var player : get_module().getServer().getOnlinePlayers()) {
+            if (open_menus.get(player.getUniqueId()) == menu) {
+                run_for(player, player::updateInventory);
+            }
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)

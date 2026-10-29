@@ -93,10 +93,10 @@ public class Menu {
             return;
         }
         update(true);
-        manager.schedule_next_tick(() -> {
+        manager.schedule_for(player, () -> {
             manager.add(player, this);
             open_window(player);
-        });
+        }, 0);
     }
 
     public boolean close(final Player player) {
@@ -120,7 +120,7 @@ public class Menu {
             return false;
         }
 
-        manager.schedule_next_tick(() -> player.closeInventory(reason));
+        manager.schedule_for(player, () -> player.closeInventory(reason), 0);
         return true;
     }
 

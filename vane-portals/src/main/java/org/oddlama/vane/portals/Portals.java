@@ -43,7 +43,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.json.JSONObject;
@@ -247,7 +247,7 @@ public class Portals extends Module<Portals> {
     // Unloading ticket counter per chunk
     private final Map<Long, Integer> chunk_ticket_count = new HashMap<>();
     // Disable tasks for portals
-    private final Map<UUID, BukkitTask> disable_tasks = new HashMap<>();
+    private final Map<UUID, ScheduledTask> disable_tasks = new HashMap<>();
 
     public PortalMenuGroup menus;
     public PortalConstructor constructor;

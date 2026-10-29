@@ -9,5 +9,6 @@ website: 'https://github.com/oddlama/vane'
 main: org.oddlama.vane.core.Core
 
 api-version: '1.21'
+folia-supported: true
 
 load: STARTUP

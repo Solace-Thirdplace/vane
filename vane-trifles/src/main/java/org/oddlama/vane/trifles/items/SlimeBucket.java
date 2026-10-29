@@ -3,7 +3,8 @@ package org.oddlama.vane.trifles.items;
 import static org.oddlama.vane.util.PlayerUtil.give_items;
 import static org.oddlama.vane.util.PlayerUtil.swing_arm;
 
-import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.UUID;
 import org.bukkit.Material;
@@ -30,7 +31,8 @@ import org.oddlama.vane.trifles.Trifles;
 public class SlimeBucket extends CustomItem<Trifles> {
     private static final float CUSTOM_MODEL_DATA_QUIET = 0x760014;
     private static final float CUSTOM_MODEL_DATA_JUMPY = 0x760015;
-    private HashSet<UUID> players_in_slime_chunks = new HashSet<>();
+    // Written from every player's region thread on Folia.
+    private final Set<UUID> players_in_slime_chunks = ConcurrentHashMap.newKeySet();
 
     public SlimeBucket(Context<Trifles> context) {
         super(context);

@@ -71,6 +71,13 @@ public class Vane extends Command<Core> {
     }
 
     private void reload_module(CommandSender sender, Module<?> module) {
+        // A reload re-registers recipes and loot and runs every component's config hooks. On Folia
+        // the command runs on the sender's region thread; do the reload on the global thread, where
+        // the same work runs at startup. On Paper this is the main thread, so it runs inline.
+        run_global(() -> reload_module_now(sender, module));
+    }
+
+    private void reload_module_now(CommandSender sender, Module<?> module) {
         if (module.reload_configuration()) {
             lang_reload_success.send(sender, "§bvane-" + module.get_name());
         } else {
@@ -79,9 +86,11 @@ public class Vane extends Command<Core> {
     }
 
     private void reload_all(CommandSender sender) {
-        for (var m : get_module().core.get_modules()) {
-            reload_module(sender, m);
-        }
+        run_global(() -> {
+            for (var m : get_module().core.get_modules()) {
+                reload_module_now(sender, m);
+            }
+        });
     }
 
     private void generate_resource_pack(CommandSender sender) {

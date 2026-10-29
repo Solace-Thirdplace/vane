@@ -36,15 +36,19 @@ public class Setspawn extends Command<Trifles> {
     private void set_spawn(Player player) {
         final var loc = player.getLocation();
 
-        // Unset spawn tag in all worlds
-        for (final var world : get_module().getServer().getWorlds()) {
-            world.getPersistentDataContainer().remove(IS_SPAWN_WORLD);
-        }
+        // World spawn and world data are global state, owned by the global region thread on
+        // Folia (inline on Paper, where commands already run on the main thread).
+        run_global(() -> {
+            // Unset spawn tag in all worlds
+            for (final var world : get_module().getServer().getWorlds()) {
+                world.getPersistentDataContainer().remove(IS_SPAWN_WORLD);
+            }
 
-        // Set spawn and mark as the default world
-        final var world = player.getWorld();
-        world.setSpawnLocation(loc);
-        world.getPersistentDataContainer().set(IS_SPAWN_WORLD, PersistentDataType.INTEGER, 1);
-        player.sendMessage("§aSpawn §7set!");
+            // Set spawn and mark as the default world
+            final var world = loc.getWorld();
+            world.setSpawnLocation(loc);
+            world.getPersistentDataContainer().set(IS_SPAWN_WORLD, PersistentDataType.INTEGER, 1);
+            player.sendMessage("§aSpawn §7set!");
+        });
     }
 }

@@ -3,7 +3,9 @@ package org.oddlama.vane.core.module;
 import java.io.IOException;
 import java.util.function.Consumer;
 import org.bukkit.NamespacedKey;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.json.JSONObject;
 import org.oddlama.vane.core.resourcepack.ResourcePackGenerator;
 
@@ -47,16 +49,36 @@ public abstract class ModuleComponent<T extends Module<T>> {
 
     protected void on_generate_resource_pack(final ResourcePackGenerator pack) throws IOException {}
 
-    public final BukkitTask schedule_task_timer(Runnable task, long delay_ticks, long period_ticks) {
+    public final ScheduledTask schedule_task_timer(Runnable task, long delay_ticks, long period_ticks) {
         return context.schedule_task_timer(task, delay_ticks, period_ticks);
     }
 
-    public final BukkitTask schedule_task(Runnable task, long delay_ticks) {
+    public final ScheduledTask schedule_task(Runnable task, long delay_ticks) {
         return context.schedule_task(task, delay_ticks);
     }
 
-    public final BukkitTask schedule_next_tick(Runnable task) {
+    public final ScheduledTask schedule_next_tick(Runnable task) {
         return context.schedule_next_tick(task);
+    }
+
+    public final ScheduledTask schedule_at(Location location, Runnable task, long delay_ticks) {
+        return context.schedule_at(location, task, delay_ticks);
+    }
+
+    public final ScheduledTask schedule_for(Entity entity, Runnable task, long delay_ticks) {
+        return context.schedule_for(entity, task, delay_ticks);
+    }
+
+    public final void run_for(Entity entity, Runnable task) {
+        context.run_for(entity, task);
+    }
+
+    public final void run_at(Location location, Runnable task) {
+        context.run_at(location, task);
+    }
+
+    public final void run_global(Runnable task) {
+        context.run_global(task);
     }
 
     public final void add_storage_migration_to(long to, String name, Consumer<JSONObject> migrator) {

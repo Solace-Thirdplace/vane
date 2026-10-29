@@ -57,14 +57,15 @@ public class DoubleDoorListener extends Listener<Trifles> {
             return;
         }
 
-        // Update second door state directly after the event (delay 0)
-        schedule_next_tick(() -> {
+        // Update second door state directly after the event (next tick), on the region
+        // that owns the door (the main thread on Paper)
+        schedule_at(block.getLocation(), () -> {
             // Make sure to include changes from last tick
             if (!first.update_cached_state() || !second.update_cached_state()) {
                 return;
             }
 
             second.set_open(first.isOpen());
-        });
+        }, 0);
     }
 }

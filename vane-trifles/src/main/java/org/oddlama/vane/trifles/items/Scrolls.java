@@ -19,6 +19,8 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
 import org.oddlama.vane.annotation.config.ConfigInt;
 import org.oddlama.vane.core.Listener;
 import org.oddlama.vane.core.module.Context;
@@ -96,6 +98,25 @@ public class Scrolls extends Listener<Trifles> {
             return;
         }
 
+        // The destination may belong to another region (Folia): check it on its own thread,
+        // then come back to the player's. On Paper both run inline, right here.
+        final var hand = event.getHand();
+        run_at(to_location, () -> {
+            final var destination = scroll.resolve_destination(player, to_location);
+            if (destination == null) {
+                return;
+            }
+            run_for(player, () -> use_scroll(player, scroll, item, hand, destination));
+        });
+    }
+
+    private void use_scroll(
+        final Player player,
+        final Scroll scroll,
+        final ItemStack item,
+        final EquipmentSlot hand,
+        final Location to_location
+    ) {
         // Check cooldown
         if (player.getCooldown(scroll.baseMaterial()) > 0) {
             return;
@@ -108,7 +129,7 @@ public class Scrolls extends Listener<Trifles> {
 
             // Damage item
             damage_item(player, item, 1);
-            swing_arm(player, event.getHand());
+            swing_arm(player, hand);
         }
     }
 
@@ -120,18 +141,23 @@ public class Scrolls extends Listener<Trifles> {
             return false;
         }
 
-        // Teleport
-        player.teleport(to, PlayerTeleportEvent.TeleportCause.PLUGIN);
+        // Teleport. Folia only allows asynchronous teleports; the destination effects play
+        // once the player has arrived, on the thread that now owns them.
+        player
+            .teleportAsync(to, PlayerTeleportEvent.TeleportCause.PLUGIN)
+            .thenAccept(success -> {
+                if (!success) {
+                    return;
+                }
+                to.getWorld().playSound(to, Sound.ITEM_CHORUS_FRUIT_TELEPORT, SoundCategory.PLAYERS, 1.0f, 1.1f);
+                to.getWorld().playSound(to, Sound.BLOCK_END_PORTAL_FRAME_FILL, SoundCategory.PLAYERS, 1.0f, 1.0f);
+                to.getWorld().spawnParticle(Particle.END_ROD, to.clone().add(0.0, 1.0, 0.0), 100, 1.0, 2.0, 1.0, 1.0);
+            });
 
-        // Play sounds
+        // Play sounds and create particles at the origin
         from.getWorld().playSound(from, Sound.ITEM_CHORUS_FRUIT_TELEPORT, SoundCategory.PLAYERS, 1.0f, 1.1f);
-        to.getWorld().playSound(to, Sound.ITEM_CHORUS_FRUIT_TELEPORT, SoundCategory.PLAYERS, 1.0f, 1.1f);
         from.getWorld().playSound(from, Sound.BLOCK_END_PORTAL_FRAME_FILL, SoundCategory.PLAYERS, 1.0f, 1.0f);
-        to.getWorld().playSound(to, Sound.BLOCK_END_PORTAL_FRAME_FILL, SoundCategory.PLAYERS, 1.0f, 1.0f);
-
-        // Create particles
         from.getWorld().spawnParticle(Particle.PORTAL, from.clone().add(0.0, 1.0, 0.0), 200, 1.0, 2.0, 1.0, 1.0);
-        to.getWorld().spawnParticle(Particle.END_ROD, to.clone().add(0.0, 1.0, 0.0), 100, 1.0, 2.0, 1.0, 1.0);
         return true;
     }
 

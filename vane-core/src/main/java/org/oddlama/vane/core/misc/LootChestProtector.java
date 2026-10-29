@@ -1,6 +1,6 @@
 package org.oddlama.vane.core.misc;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.bukkit.block.Block;
@@ -18,7 +18,8 @@ import org.oddlama.vane.core.module.Context;
 public class LootChestProtector extends Listener<Core> {
 
     // Prevent loot chest destruction
-    private final Map<Block, Map<UUID, Long>> loot_break_attempts = new HashMap<>();
+    // Written from every region thread on Folia.
+    private final Map<Block, Map<UUID, Long>> loot_break_attempts = new ConcurrentHashMap<>();
 
     // TODO(legacy): this should become a separate group instead of having
     // this boolean.
@@ -67,7 +68,7 @@ public class LootChestProtector extends Listener<Core> {
                 block_attempts.put(player.getUniqueId(), now);
             }
         } else {
-            block_attempts = new HashMap<UUID, Long>();
+            block_attempts = new ConcurrentHashMap<UUID, Long>();
             block_attempts.put(player.getUniqueId(), now);
             loot_break_attempts.put(block, block_attempts);
         }

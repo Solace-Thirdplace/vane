@@ -8,7 +8,7 @@ import java.util.UUID;
 import org.oddlama.vane.external.apache.commons.lang3.tuple.Pair;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.oddlama.vane.core.module.Context;
 import org.oddlama.vane.core.module.ModuleComponent;
 import org.oddlama.vane.portals.event.EntityMoveEvent;
@@ -28,7 +28,7 @@ public class EntityMoveProcessor extends ModuleComponent<Portals> {
     private HashMap<UUID, Pair<Entity, Location>> move_event_current_positions = new HashMap<>();
     private HashMap<UUID, Pair<Entity, Location>> move_event_old_positions = new HashMap<>();
 
-    private BukkitTask task;
+    private ScheduledTask task;
 
     // Never process entity-move events for more than ~30% of a tick.
     // We use 15ms threshold time, and 50ms would be 1 tick.
