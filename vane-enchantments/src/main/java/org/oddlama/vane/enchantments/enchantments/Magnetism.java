@@ -14,7 +14,7 @@ import org.bukkit.event.block.BlockDropItemEvent;
 import org.bukkit.event.entity.EntityDropItemEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.util.Vector;
 import org.oddlama.vane.annotation.config.ConfigInt;
 import org.oddlama.vane.annotation.enchantment.Rarity;
@@ -68,7 +68,7 @@ public class Magnetism extends CustomEnchantment<Enchantments> {
     )
     public int config_attribution_window_seconds;
 
-    private BukkitTask pull_task;
+    private ScheduledTask pull_task;
 
     public Magnetism(Context<Enchantments> context) {
         super(context);
@@ -165,28 +165,34 @@ public class Magnetism extends CustomEnchantment<Enchantments> {
         final long window_ms = config_attribution_window_seconds * 1000L;
         final long now = System.currentTimeMillis();
 
+        // The timer runs on the global region. Each player is pulled for on their own
+        // thread (inline on Paper, the player's region on Folia).
         for (final var player : Bukkit.getOnlinePlayers()) {
-            if (!player.isValid() || player.isDead()) {
-                continue;
-            }
-
-            final var mode = player.getGameMode();
-            if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR) {
-                continue;
-            }
-
-            final var boots = player.getInventory().getBoots();
-            if (boots == null) {
-                continue;
-            }
-
-            final int level = boots.getEnchantmentLevel(this.bukkit());
-            if (level == 0) {
-                continue;
-            }
-
-            pull_nearby_items(player, radius_for_level(level), now, window_ms);
+            run_for(player, () -> pull_for(player, now, window_ms));
         }
+    }
+
+    private void pull_for(final Player player, final long now, final long window_ms) {
+        if (!player.isValid() || player.isDead()) {
+            return;
+        }
+
+        final var mode = player.getGameMode();
+        if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR) {
+            return;
+        }
+
+        final var boots = player.getInventory().getBoots();
+        if (boots == null) {
+            return;
+        }
+
+        final int level = boots.getEnchantmentLevel(this.bukkit());
+        if (level == 0) {
+            return;
+        }
+
+        pull_nearby_items(player, radius_for_level(level), now, window_ms);
     }
 
     private int radius_for_level(final int level) {
@@ -215,6 +221,11 @@ public class Magnetism extends CustomEnchantment<Enchantments> {
             final long dropped_at = pdc.getOrDefault(DROPPED_AT_KEY, PersistentDataType.LONG, 0L);
             if (now - dropped_at > window_ms) {
                 // Settled: permanently ineligible, we never re-tag or refresh this.
+                continue;
+            }
+
+            if (!Bukkit.isOwnedByCurrentRegion(item)) {
+                // Folia: the item sits in a neighbouring region; only its owner may move it.
                 continue;
             }
 

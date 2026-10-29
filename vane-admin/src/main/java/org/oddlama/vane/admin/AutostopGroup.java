@@ -4,7 +4,7 @@ import static org.oddlama.vane.util.Conversions.ms_to_ticks;
 import static org.oddlama.vane.util.TimeUtil.format_time;
 
 import org.bukkit.command.CommandSender;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.oddlama.vane.annotation.config.ConfigLong;
 import org.oddlama.vane.annotation.lang.LangMessage;
 import org.oddlama.vane.core.lang.TranslatedMessage;
@@ -32,7 +32,7 @@ public class AutostopGroup extends ModuleGroup<Admin> {
     public TranslatedMessage lang_shutdown;
 
     // Variables
-    public BukkitTask task = null;
+    public ScheduledTask task = null;
     public long start_time = -1;
     public long stop_time = -1;
 

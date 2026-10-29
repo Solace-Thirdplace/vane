@@ -40,6 +40,17 @@ public abstract class Scroll extends CustomItem<Trifles> {
      */
     public abstract Location teleport_location(final ItemStack scroll, final Player player, boolean imminent_teleport);
 
+    /**
+     * Final check of a destination returned by {@link #teleport_location}, run on the thread that
+     * owns the destination's region (on Folia that is not the player's thread, so only touch the
+     * destination's blocks here, and the player only to read stored data or send messages).
+     * Called only for an imminent teleport. Returns where to teleport, which may differ from the
+     * given destination, or null to prevent teleporting, after notifying the player.
+     */
+    public Location resolve_destination(final Player player, final Location destination) {
+        return destination;
+    }
+
     @Override
     public EnumSet<InhibitBehavior> inhibitedBehaviors() {
         final var set = EnumSet.of(

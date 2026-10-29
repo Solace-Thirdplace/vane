@@ -58,9 +58,13 @@ public class AuthMultiplexer extends Listener<Core> implements PluginMessageList
             .unregisterIncomingPluginChannel(get_module(), CHANNEL_AUTH_MULTIPLEX, this);
     }
 
-    public synchronized String auth_multiplex_player_name(final UUID uuid) {
-        final var original_player_id = storage_auth_multiplex.get(uuid);
-        final var multiplexer_id = storage_auth_multiplexer_id.get(uuid);
+    public String auth_multiplex_player_name(final UUID uuid) {
+        final UUID original_player_id;
+        final Integer multiplexer_id;
+        synchronized (get_module().persistent_storage_manager) {
+            original_player_id = storage_auth_multiplex.get(uuid);
+            multiplexer_id = storage_auth_multiplexer_id.get(uuid);
+        }
         if (original_player_id == null || multiplexer_id == null) {
             return null;
         }
@@ -90,7 +94,10 @@ public class AuthMultiplexer extends Listener<Core> implements PluginMessageList
         player.displayName(display_name_component);
         player.playerListName(display_name_component);
 
-        final var original_player_id = storage_auth_multiplex.get(id);
+        final UUID original_player_id;
+        synchronized (get_module().persistent_storage_manager) {
+            original_player_id = storage_auth_multiplex.get(id);
+        }
         Resolve.Skin skin;
         try {
             skin = resolve_skin(original_player_id);
@@ -110,7 +117,7 @@ public class AuthMultiplexer extends Listener<Core> implements PluginMessageList
     }
 
     @Override
-    public synchronized void onPluginMessageReceived(final String channel, final Player player, byte[] bytes) {
+    public void onPluginMessageReceived(final String channel, final Player player, byte[] bytes) {
         if (!channel.equals(CHANNEL_AUTH_MULTIPLEX)) {
             return;
         }
@@ -138,13 +145,17 @@ public class AuthMultiplexer extends Listener<Core> implements PluginMessageList
                     "} multiplexer_id " +
                     multiplexer_id
                 );
-            storage_auth_multiplex.put(new_uuid, old_uuid);
-            storage_auth_multiplexer_id.put(new_uuid, multiplexer_id);
+            synchronized (get_module().persistent_storage_manager) {
+                storage_auth_multiplex.put(new_uuid, old_uuid);
+                storage_auth_multiplexer_id.put(new_uuid, multiplexer_id);
+            }
             mark_persistent_storage_dirty();
 
-            final var multiplexed_player = get_module().getServer().getOfflinePlayer(new_uuid);
-            if (multiplexed_player.isOnline()) {
-                try_init_multiplexed_player_name(multiplexed_player.getPlayer());
+            // The message arrives on the sending player's thread; the multiplexed player
+            // may live in another region (Folia), so update them on their own scheduler.
+            final var multiplexed_player = get_module().getServer().getPlayer(new_uuid);
+            if (multiplexed_player != null) {
+                run_for(multiplexed_player, () -> try_init_multiplexed_player_name(multiplexed_player));
             }
         } catch (IOException e) {
             get_module().log.log(Level.SEVERE, "Failed to process auth multiplex message", e);

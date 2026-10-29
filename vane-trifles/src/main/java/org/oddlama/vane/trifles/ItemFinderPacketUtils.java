@@ -17,8 +17,8 @@ import org.bukkit.block.Container;
 import org.bukkit.block.ShulkerBox;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import org.oddlama.vane.util.Scheduling;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -50,17 +50,16 @@ public class ItemFinderPacketUtils {
         // Send packet
         PacketEvents.getAPI().getPlayerManager().sendPacket(player, glowing_packet);
 
-        // Schedule repeating packet b/c if the player looks away from entities, they will stop glowing
-        var repeating_packet_task = new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (!player.isOnline()) {
-                    this.cancel();
-                }
-
-                PacketEvents.getAPI().getPlayerManager().sendPacket(player, glowing_packet);
-            }
-        }.runTaskTimer(module, 1, 1);
+        // Schedule repeating packet b/c if the player looks away from entities, they will stop glowing.
+        // Runs on the player's scheduler, which drops it when the player leaves.
+        var repeating_packet_task = Scheduling.entity_timer(
+            module,
+            player,
+            task -> PacketEvents.getAPI().getPlayerManager().sendPacket(player, glowing_packet),
+            null,
+            1,
+            1
+        );
 
         // Create non-glowing packet
         var non_glowing_entity_data = new ArrayList<>(base_entity_data);
@@ -70,7 +69,7 @@ public class ItemFinderPacketUtils {
         );
 
         // Run task later to send packet to stop glowing
-        new ResetGlowingPacketTask(player, non_glowing_packet, repeating_packet_task).runTaskLater(module, GLOW_DURATION);
+        schedule_reset(module, player, non_glowing_packet, repeating_packet_task);
     }
 
     static void indicate_container_match(@NotNull Trifles module, @NotNull Player player, @NotNull Container container) {
@@ -134,7 +133,7 @@ public class ItemFinderPacketUtils {
         var destroy_entity_packet = new WrapperPlayServerDestroyEntities(display_id);
 
         // Run task later to remove entity
-        new ResetGlowingPacketTask(player, destroy_entity_packet, null).runTaskLater(module, GLOW_DURATION);
+        schedule_reset(module, player, destroy_entity_packet, null);
     }
 
     // Special function for chests
@@ -190,31 +189,34 @@ public class ItemFinderPacketUtils {
         var destroy_entity_packet = new WrapperPlayServerDestroyEntities(display_id);
 
         // Run task later to remove entity
-        new ResetGlowingPacketTask(player, destroy_entity_packet, null).runTaskLater(module, GLOW_DURATION);
+        schedule_reset(module, player, destroy_entity_packet, null);
     }
 
-    private static class ResetGlowingPacketTask extends BukkitRunnable {
-        private final Player player;
-        private final PacketWrapper<?> packet;
-        private final BukkitTask optional_repeating_packet_task;
+    // Sends the reset packet after the glow duration, on the player's scheduler. If the player
+    // leaves first the scheduler drops the task (and the repeating one), and their client
+    // forgets the fake entities anyway.
+    private static void schedule_reset(
+        @NotNull Trifles module,
+        @NotNull Player player,
+        @NotNull PacketWrapper<?> packet,
+        @Nullable ScheduledTask optional_repeating_packet_task
+    ) {
+        Scheduling.entity(
+            module,
+            player,
+            () -> {
+                if (optional_repeating_packet_task != null) {
+                    optional_repeating_packet_task.cancel();
+                }
 
-        public ResetGlowingPacketTask(@NotNull Player player, @NotNull PacketWrapper<?> packet, @Nullable BukkitTask optional_repeating_packet_task) {
-            this.player = player;
-            this.packet = packet;
-            this.optional_repeating_packet_task = optional_repeating_packet_task;
-        }
-
-        @Override
-        public void run() {
-            if (!player.isOnline()) {
-                this.cancel();
-            }
-
-            if (optional_repeating_packet_task != null && !optional_repeating_packet_task.isCancelled()) {
-                optional_repeating_packet_task.cancel();
-            }
-
-            PacketEvents.getAPI().getPlayerManager().sendPacket(player, packet);
-        }
+                PacketEvents.getAPI().getPlayerManager().sendPacket(player, packet);
+            },
+            () -> {
+                if (optional_repeating_packet_task != null) {
+                    optional_repeating_packet_task.cancel();
+                }
+            },
+            GLOW_DURATION
+        );
     }
 }

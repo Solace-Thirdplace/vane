@@ -46,18 +46,24 @@ public class HomeScroll extends Scroll {
 
     @Override
     public Location teleport_location(final ItemStack scroll, Player player, boolean imminent_teleport) {
-        final var to_location = player.getRespawnLocation();
-        if (imminent_teleport && to_location == null) {
-            // replaced deprecated call with getRespawnLocation()
-            final var to_potential_location = player.getRespawnLocation();
-            if (to_potential_location != null) {
-                // "You have no home bed or charge respawn anchor, or it was obstructed"
-                // The most cursed sentence in minecraft.
-                player.sendActionBar(Component.translatable("block.minecraft.spawn.not_valid"));
-            } else {
-                // "Sleep in a bed to change your respawn point."
-                player.sendActionBar(Component.translatable("advancements.adventure.sleep_in_bed.description"));
-            }
+        // The stored respawn point only. Whether its bed or anchor is still usable needs a block
+        // read, which happens in resolve_destination() on the thread that owns that block.
+        final var respawn_point = player.getRespawnLocation(false);
+        if (imminent_teleport && respawn_point == null) {
+            // "Sleep in a bed to change your respawn point."
+            player.sendActionBar(Component.translatable("advancements.adventure.sleep_in_bed.description"));
+        }
+        return respawn_point;
+    }
+
+    @Override
+    public Location resolve_destination(final Player player, final Location destination) {
+        // Runs in the respawn point's region: validate the bed or anchor and find where to stand.
+        final var to_location = player.getRespawnLocation(true);
+        if (to_location == null) {
+            // "You have no home bed or charged respawn anchor, or it was obstructed"
+            // The most cursed sentence in minecraft.
+            player.sendActionBar(Component.translatable("block.minecraft.spawn.not_valid"));
         }
         return to_location;
     }

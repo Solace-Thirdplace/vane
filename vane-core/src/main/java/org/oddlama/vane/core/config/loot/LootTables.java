@@ -62,13 +62,8 @@ public class LootTables<T extends Module<T>> extends ModuleComponent<T> {
         // Loot tables are processed in on_config_change and not in on_disable() / on_enable(),
         // as the current loot table modifications need to be removed even if we are disabled
         // afterwards.
-        config_loot
-            .tables()
-            .forEach(table ->
-                table.affected_tables.forEach(table_key ->
-                    get_module().loot_table(table_key).remove(table.key(base_loot_key))
-                )
-            );
+        // When registering, put() replaces each entry in one step instead of removing it first,
+        // so a loot roll on another region thread (Folia) never sees the table without it.
         if (enabled() && config_register_loot) {
             config_loot
                 .tables()
@@ -78,6 +73,14 @@ public class LootTables<T extends Module<T>> extends ModuleComponent<T> {
                         get_module().loot_table(table_key).put(table.key(base_loot_key), entries)
                     );
                 });
+        } else {
+            config_loot
+                .tables()
+                .forEach(table ->
+                    table.affected_tables.forEach(table_key ->
+                        get_module().loot_table(table_key).remove(table.key(base_loot_key))
+                    )
+                );
         }
     }
 

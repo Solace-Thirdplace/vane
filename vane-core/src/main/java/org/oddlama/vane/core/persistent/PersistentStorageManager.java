@@ -111,7 +111,7 @@ public class PersistentStorageManager {
     }
 
     @SuppressWarnings("unchecked")
-    public boolean load(File file) {
+    public synchronized boolean load(File file) {
         if (!file.exists() && is_loaded) {
             module.log.severe("Cannot reload persistent storage from nonexistent file '" + file.getName() + "'");
             last_error = "storage file '" + file.getName() + "' no longer exists";
@@ -180,7 +180,9 @@ public class PersistentStorageManager {
         return true;
     }
 
-    public void save(File file) {
+    // Synchronized with writers of @Persistent fields that run on region threads (Folia), see
+    // AuthMultiplexer, so a save never iterates a map while it is being modified.
+    public synchronized void save(File file) {
         if (!is_loaded) {
             // Don't save if never loaded or a previous load was faulty.
             return;
