@@ -1,6 +1,7 @@
 package org.oddlama.vane.trifles;
 
 import java.util.function.Predicate;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -94,7 +95,7 @@ public class ItemFinder extends Listener<Trifles> {
 
         event.setCancelled(true);
         if (find_item_exact(player, item)) {
-            get_module().schedule_next_tick(player::closeInventory);
+            get_module().schedule_for(player, player::closeInventory, 0);
         }
     }
 
@@ -174,6 +175,10 @@ public class ItemFinder extends Listener<Trifles> {
         for (int cx = origin_chunk.getX() - config_radius; cx <= origin_chunk.getX() + config_radius; ++cx) {
             for (int cz = origin_chunk.getZ() - config_radius; cz <= origin_chunk.getZ() + config_radius; ++cz) {
                 if (!world.isChunkLoaded(cx, cz)) {
+                    continue;
+                }
+                // Folia: only scan chunks owned by the player's region (always true on Paper).
+                if (!Bukkit.isOwnedByCurrentRegion(world, cx, cz)) {
                     continue;
                 }
                 final var chunk = world.getChunkAt(cx, cz);

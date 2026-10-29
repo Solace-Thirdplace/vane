@@ -4,13 +4,15 @@ import org.oddlama.vane.annotation.VaneModule;
 import org.oddlama.vane.core.module.Module;
 import org.oddlama.vane.trifles.items.XpBottles;
 
-import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.UUID;
 
 @VaneModule(name = "trifles", bstats = 8644, config_version = 4, lang_version = 4, storage_version = 1)
 public class Trifles extends Module<Trifles> {
 
-    public final HashMap<UUID, Long> last_xp_bottle_consume_time = new HashMap<>();
+    // Written and read from every player's region thread on Folia.
+    public final Map<UUID, Long> last_xp_bottle_consume_time = new ConcurrentHashMap<>();
     public XpBottles xp_bottles;
     public ItemFinder item_finder;
     public StorageGroup storage_group;
