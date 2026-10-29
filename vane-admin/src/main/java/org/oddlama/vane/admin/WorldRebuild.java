@@ -10,7 +10,7 @@ import org.bukkit.Material;
 import org.bukkit.SoundCategory;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.util.Vector;
 import org.oddlama.vane.annotation.config.ConfigDouble;
 import org.oddlama.vane.annotation.config.ConfigLong;
@@ -75,7 +75,7 @@ public class WorldRebuild extends Listener<Admin> {
     public class Rebuilder implements Runnable {
 
         private List<BlockState> states;
-        private BukkitTask task = null;
+        private ScheduledTask task = null;
         private long amount_rebuild = 0;
 
         public Rebuilder(final List<BlockState> _states) {
