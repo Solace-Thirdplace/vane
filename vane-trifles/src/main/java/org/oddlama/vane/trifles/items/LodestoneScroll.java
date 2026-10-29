@@ -90,19 +90,19 @@ public class LodestoneScroll extends Scroll {
             return null;
         }
 
-        // Whether the lodestone is still there is checked in check_destination(), on the
+        // Whether the lodestone is still there is checked in resolve_destination(), on the
         // thread that owns it. Getting the block's location does not load its chunk.
         return lodestone_location.getBlock().getLocation().add(0.5, 1.005, 0.5);
     }
 
     @Override
-    public boolean check_destination(final Player player, final Location destination) {
+    public Location resolve_destination(final Player player, final Location destination) {
         final var lodestone = destination.clone().subtract(0.0, 1.0, 0.0).getBlock();
         if (lodestone.getType() != Material.LODESTONE) {
             lang_teleport_missing_lodestone.send_action_bar(player);
-            return false;
+            return null;
         }
-        return true;
+        return destination;
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)

@@ -43,11 +43,12 @@ public abstract class Scroll extends CustomItem<Trifles> {
     /**
      * Final check of a destination returned by {@link #teleport_location}, run on the thread that
      * owns the destination's region (on Folia that is not the player's thread, so only touch the
-     * destination's blocks here, and the player only to send messages). Called only for an
-     * imminent teleport. Return false to prevent teleporting, after notifying the player.
+     * destination's blocks here, and the player only to read stored data or send messages).
+     * Called only for an imminent teleport. Returns where to teleport, which may differ from the
+     * given destination, or null to prevent teleporting, after notifying the player.
      */
-    public boolean check_destination(final Player player, final Location destination) {
-        return true;
+    public Location resolve_destination(final Player player, final Location destination) {
+        return destination;
     }
 
     @Override

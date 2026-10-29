@@ -102,10 +102,11 @@ public class Scrolls extends Listener<Trifles> {
         // then come back to the player's. On Paper both run inline, right here.
         final var hand = event.getHand();
         run_at(to_location, () -> {
-            if (!scroll.check_destination(player, to_location)) {
+            final var destination = scroll.resolve_destination(player, to_location);
+            if (destination == null) {
                 return;
             }
-            run_for(player, () -> use_scroll(player, scroll, item, hand, to_location));
+            run_for(player, () -> use_scroll(player, scroll, item, hand, destination));
         });
     }
 
